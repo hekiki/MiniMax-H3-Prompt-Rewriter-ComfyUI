@@ -19,6 +19,7 @@ from __future__ import annotations
 import importlib
 import logging
 import os
+import re
 from dataclasses import dataclass
 
 from . import catalog, discovery, paths
@@ -605,8 +606,159 @@ def _check_local_gguf(section: str, entry: dict, model: str, projector: str, lin
         )
 
 
-def _check_remote(section: str, entry: dict, lines: list) -> float | None:
-    """What the Hub can be asked without moving any weights."""
+SHOWN_REPO_FILES = 60
+GGUF_SUFFIX = ".gguf"
+_SPLIT_PART = re.compile(r"-\d{5}-of-\d{5}\.gguf$", re.IGNORECASE)
+_QUANT_TAIL = re.compile(
+    r"^(?P<stem>.+?)[-_.](?P<quant>(?:UD-)?(?:I?Q\d\w*|B?F16|F32))$", re.IGNORECASE
+)
+
+
+def suggested_name(path: str) -> str:
+    """What the dropdown could call a GGUF file: its stem, with the quantisation apart.
+
+    'Qwen2.5-Omni-7B-Q4_K_M.gguf' reads 'Qwen2.5-Omni-7B Q4_K_M', the way the
+    packaged entries are named. A file with no quantisation in its name keeps
+    its stem whole.
+    """
+    stem = path.replace("\\", "/").rsplit("/", 1)[-1]
+    if stem.lower().endswith(GGUF_SUFFIX):
+        stem = stem[: -len(GGUF_SUFFIX)]
+    named = _QUANT_TAIL.match(stem)
+    return f"{named.group('stem')} {named.group('quant')}" if named else stem
+
+
+def _gigabytes(size: int) -> float:
+    return round(size / 1_000_000_000, 2)
+
+
+def _gguf_offers(section: str, files: list[tuple[str, int]]) -> dict:
+    """The GGUF files among ``(path, bytes)``, to pick from, smallest first.
+
+    Models and projectors apart, since the projector goes in 'mmproj' -- and a
+    list that takes none is offered none. A model split into parts is left out
+    and counted instead: an entry names one file, and only that file is fetched.
+    """
+    models: list[dict] = []
+    projectors: list[dict] = []
+    split: set[str] = set()
+    for path, size in files:
+        base = path.replace("\\", "/").rsplit("/", 1)[-1]
+        if not base.lower().endswith(GGUF_SUFFIX):
+            continue
+        part = _SPLIT_PART.search(path)
+        if part:
+            split.add(path[: part.start()].lower())
+            continue
+        offer = {"file": path, "gb": _gigabytes(size)}
+        if "mmproj" in base.lower():
+            projectors.append(offer)
+        else:
+            offer["name"] = suggested_name(path)
+            models.append(offer)
+
+    def order(offer: dict) -> tuple:
+        return offer["gb"], offer["file"].lower()
+
+    if spec(section).mmproj == MMPROJ_UNUSED:
+        projectors = []
+    return {
+        "files": sorted(models, key=order),
+        "projectors": sorted(projectors, key=order),
+        "split": len(split),
+    }
+
+
+def _listed_here(folder: str) -> list[tuple[str, int]]:
+    """The files directly inside a folder on this machine, with their sizes."""
+    found = []
+    for name in sorted(os.listdir(folder)):
+        path = os.path.join(folder, name)
+        if os.path.isfile(path):
+            found.append((name, os.path.getsize(path)))
+    return found
+
+
+def repo_files(section: str, repo: str) -> dict:
+    """'Check it' with a repository and no file yet: what is in it to pick from.
+
+    A folder on this machine is read as it stands; anything else that reads as
+    a repository id is asked of the Hub, which lists a repository's files and
+    their sizes without moving any weights. The network refusal comes first, for
+    the same reason it does in ``clean_entry``.
+    """
+    from . import download
+
+    paths.refuse_network_path(repo, "'repo'", _NETWORK_ADVICE)
+    lines: list[dict] = []
+    nothing = {"files": [], "projectors": [], "split": 0}
+    here = os.path.isdir(repo)
+    if not here and not paths.looks_like_repo_id(repo):
+        _say(
+            lines, "bad",
+            f"'{repo}' is neither a folder on this machine nor a Hugging Face repository id "
+            f"-- that looks like 'owner/name'.",
+        )
+        return {"verdict": "bad", "lines": lines, "download_gb": None, **nothing}
+    try:
+        if here:
+            listed = _listed_here(repo)
+        else:
+            listed = [
+                (one.path, one.size)
+                for one in download.list_repo_files(repo, token=download.access_token())
+            ]
+    except Exception as error:
+        _say(lines, "bad", f"'{repo}' could not be read: {error}")
+        return {"verdict": "bad", "lines": lines, "download_gb": None, **nothing}
+
+    found = spec(section)
+    offers = _gguf_offers(section, listed)
+    models, projectors, split = offers["files"], offers["projectors"], offers["split"]
+    where = "This folder" if here else f"'{repo}'"
+    if models:
+        held = f"{len(models)} GGUF model{'s' if len(models) != 1 else ''}"
+        if found.mmproj != MMPROJ_UNUSED:
+            held += f" and {len(projectors)} projector{'s' if len(projectors) != 1 else ''}"
+        _say(
+            lines, "good",
+            f"{where} holds {held}. Pick the model below"
+            + (", then its projector" if found.mmproj != MMPROJ_UNUSED else "")
+            + ": the file goes into the form, with a name when none is typed yet.",
+        )
+    else:
+        _say(
+            lines, "bad",
+            f"{where} holds no single-file GGUF model"
+            + (", and this list takes GGUF only." if found.gguf_only else
+               ". For a folder of safetensors choose the 'transformers' format."),
+        )
+    if found.needs_mmproj and models and not projectors:
+        _say(
+            lines, "warn",
+            f"There is no projector ('mmproj') in it, and '{found.title}' needs one beside "
+            f"the model. The pair comes out of one conversion, so look for a repository "
+            f"that carries both.",
+        )
+    if split:
+        _say(
+            lines, "note",
+            f"{split} more {'is' if split == 1 else 'are'} split into parts and left out: an "
+            f"entry names one file, and only that file is fetched.",
+        )
+    if len(models) > SHOWN_REPO_FILES or len(projectors) > SHOWN_REPO_FILES:
+        _say(lines, "note", f"The {SHOWN_REPO_FILES} smallest of each are shown.")
+    offers["files"] = models[:SHOWN_REPO_FILES]
+    offers["projectors"] = projectors[:SHOWN_REPO_FILES]
+    return {"verdict": _worst(lines), "lines": lines, "download_gb": None, **offers}
+
+
+def _check_remote(section: str, entry: dict, lines: list, picks: dict) -> float | None:
+    """What the Hub can be asked without moving any weights.
+
+    A named file the repository does not have puts what it does have into
+    ``picks``, so a misspelt name is mended with a click rather than a retype.
+    """
     found = spec(section)
     repo = str(entry.get("repo") or "")
     if not paths.looks_like_repo_id(repo):
@@ -622,15 +774,22 @@ def _check_remote(section: str, entry: dict, lines: list) -> float | None:
 
         wanted = tuple(one for one in (entry.get("file"), entry.get("mmproj")) if one)
         try:
-            count, size = download.repo_size(repo, allow=wanted)
+            listed = download.list_repo_files(repo, token=download.access_token())
         except Exception as error:
             _say(lines, "warn", f"'{repo}' could not be read: {error}")
             return None
+        chosen = download.select_files(listed, allow=wanted)
+        count, size = len(chosen), sum(item.size for item in chosen)
         if count < len(wanted):
+            picks.update(_gguf_offers(section, [(one.path, one.size) for one in listed]))
+            picks["files"] = picks["files"][:SHOWN_REPO_FILES]
+            picks["projectors"] = picks["projectors"][:SHOWN_REPO_FILES]
+            offered = picks["files"] or picks["projectors"]
             _say(
                 lines, "bad",
                 f"'{repo}' exists, but only {count} of the {len(wanted)} named files are in "
-                f"it. Check the spelling of {' and '.join(repr(one) for one in wanted)}.",
+                f"it. Check the spelling of {' and '.join(repr(one) for one in wanted)}"
+                + (", or pick from what it holds below." if offered else "."),
             )
             return None
         gigabytes = round(size / 1_000_000_000, 2)
@@ -672,6 +831,7 @@ def check(section: str, entry: dict) -> dict:
     """
     found = spec(section)
     lines: list[dict] = []
+    picks: dict = {}
     size: float | None = None
 
     if entry.get("format") == catalog.FORMAT_GGUF:
@@ -682,7 +842,7 @@ def check(section: str, entry: dict) -> dict:
         if model:
             _check_local_gguf(section, entry, model, projector, lines)
         else:
-            size = _check_remote(section, entry, lines)
+            size = _check_remote(section, entry, lines, picks)
     else:
         reference = str(entry.get("repo") or "")
         directory = reference if os.path.isdir(reference) else ""
@@ -694,11 +854,11 @@ def check(section: str, entry: dict) -> dict:
                 for problem in report.problems:
                     _say(lines, "bad" if not report.architecture_ok else "warn", problem)
         else:
-            size = _check_remote(section, entry, lines)
+            size = _check_remote(section, entry, lines, picks)
 
     if not lines:
         _say(lines, "warn", "Nothing could be checked from here.")
-    return {"verdict": _worst(lines), "lines": lines, "download_gb": size}
+    return {"verdict": _worst(lines), "lines": lines, "download_gb": size, **picks}
 
 
 LOCAL_PREFIX = "on disk: "

@@ -1,7 +1,8 @@
 import { api } from "../../scripts/api.js";
 import { app } from "../../scripts/app.js";
 import { buttonRow, installStyle, setWidgetValue, told, widgetNamed } from "./mmx_controls.js";
-import { ask, copy, element, frame, openEdit } from "./prompt_library.js";
+import { openEdit } from "./prompt_library.js";
+import { ask, copy, element, frame, walkable } from "./mmx_window.js";
 
 const NODE = "MiniMaxH3PromptPresets";
 const PRESET = "preset";
@@ -87,8 +88,12 @@ let SHELF = null;
 
 function shelf() {
     if (!SHELF) {
-        SHELF = ask(ROOT).then(({ ok, payload }) => {
-            if (!ok || !Array.isArray(payload?.records)) return null;
+        SHELF = ask(ROOT).then(({ ok, status, payload }) => {
+            if (!ok) {
+                SHELF = null;
+                return { unread: payload?.error || `HTTP ${status}` };
+            }
+            if (!Array.isArray(payload?.records)) return null;
             for (const item of payload.records) {
                 item.label = nameOf(item, payload);
                 item.spoken = (item.langs || []).length > 0;
@@ -231,7 +236,13 @@ function fill(holder, items, make) {
         { root: holder, rootMargin: "600px" }
     );
     watcher.observe(sentinel);
-    return () => watcher?.disconnect();
+    return {
+        stop: () => watcher?.disconnect(),
+        more,
+        reach(index) {
+            while (at <= index && at < items.length) more();
+        },
+    };
 }
 
 function chipRow(holder, legend, options, chosen, redraw) {
@@ -256,7 +267,7 @@ function chipRow(holder, legend, options, chosen, redraw) {
 
 function openPicker(node) {
     installStyle(STYLE_ID, STYLE);
-    const { panel, close } = frame(true);
+    const { panel, close } = frame(true, { size: "presets" });
     panel.classList.add("mmxpre-panel");
     panel.appendChild(element("h3", "mmxlib-title", "Bundled prompts"));
     panel.appendChild(
@@ -300,16 +311,22 @@ function openPicker(node) {
         spoken: new Set(),
     };
     let data = null;
-    let stop = null;
+    let filling = null;
     let typing = null;
     let clearing = null;
+    let opened = false;
+
+    const walker = walkable(panel, list, {
+        search,
+        row: ".mmxpre-card",
+        take: (lit) => lit.querySelector(".mmxpre-acts button")?.click(),
+        more: () => filling?.more(),
+    });
+
+    const tagged = () => Object.values(wanted).some((set) => set.size);
 
     function narrowed() {
-        if (clearing) {
-            clearing.style.display = Object.values(wanted).some((set) => set.size)
-                ? ""
-                : "none";
-        }
+        if (clearing) clearing.style.display = tagged() ? "" : "none";
         draw();
     }
 
@@ -327,6 +344,7 @@ function openPicker(node) {
 
     function make(item) {
         const holder = element("div", "mmxpre-card");
+        holder.dataset.key = String(item.id);
 
         const picture = document.createElement("img");
         picture.className = "mmxpre-thumb";
@@ -365,17 +383,31 @@ function openPicker(node) {
     }
 
     function draw() {
-        stop?.();
+        filling?.stop();
         list.replaceChildren();
         list.scrollTop = 0;
         const shown = data.records.filter(keeps);
         count.textContent = `${shown.length} of ${data.records.length}`;
         if (!shown.length) {
             list.appendChild(element("div", "mmxlib-none", "Nothing here matches."));
-            stop = null;
+            filling = null;
+            walker.light(null);
             return;
         }
-        stop = fill(list, shown, make);
+        filling = fill(list, shown, make);
+        relight(shown);
+    }
+
+    function relight(shown) {
+        const keep = String(widgetNamed(node, PRESET)?.value || "");
+        let at = keep ? shown.findIndex((item) => String(item.id) === keep) : -1;
+        if (at < 0 && (search.value.trim() || tagged())) at = 0;
+        if (at < 0) {
+            walker.light(null);
+            return;
+        }
+        filling.reach(at);
+        walker.light(walker.rows()[at], opened ? "nearest" : "center");
     }
 
     function facets() {
@@ -434,11 +466,26 @@ function openPicker(node) {
 
     search.addEventListener("input", () => {
         clearTimeout(typing);
-        typing = setTimeout(draw, TYPING);
+        typing = setTimeout(() => {
+            typing = null;
+            draw();
+        }, TYPING);
+    });
+    search.addEventListener("keydown", (event) => {
+        if (!typing || !["Enter", "ArrowDown", "ArrowUp"].includes(event.key)) return;
+        clearTimeout(typing);
+        typing = null;
+        draw();
     });
 
     list.appendChild(element("div", "mmxlib-none", "Reading the collection..."));
     shelf().then((found) => {
+        if (found?.unread) {
+            list.replaceChildren(
+                element("div", "mmxlib-none", `The bundled prompts did not arrive. ${found.unread}`)
+            );
+            return;
+        }
         data = found;
         if (!data) {
             list.replaceChildren(
@@ -454,6 +501,7 @@ function openPicker(node) {
         sayCredit(credit, data);
         facets();
         draw();
+        opened = true;
         search.focus();
     });
 }

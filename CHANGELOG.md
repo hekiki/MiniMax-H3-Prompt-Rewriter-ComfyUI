@@ -6,6 +6,87 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.28.0 - 2026-10-10
+
+### Added
+
+- **Check it lists what a repository holds.** A GGUF entry with a repository and
+  no file used to be refused for having no file -- and for having no name, if
+  none was typed yet. Now Check it answers the question that was being asked:
+  the GGUF files in that repository, as buttons, smallest first. A click puts the
+  file into the form, and a name in the style of the packaged entries
+  (`Qwen2.5-Omni-7B Q4_K_M`) while none of your own is typed. The lists that run a
+  pair get the projectors in a row of their own, for `mmproj`, filled in by
+  themselves when the repository holds only one; once both halves are there the
+  check runs and adds up the download. A model split into parts
+  (`-00001-of-00003.gguf`) is counted and left out, because an entry names one
+  file and only that file is downloaded. A folder on this machine in `repo` is
+  listed the same way, and a file name the repository does not have brings up
+  the same buttons. A name or a size typed by hand is never replaced; a size that
+  disagrees with the files gets a warning instead.
+
+- **The windows can be resized.** The prompt editor, the prompt library, the
+  Model list and the bundled prompts drag from any edge or corner, fill the
+  browser tab from a button in their top corner, and each kind remembers its own
+  size. The prompt box in the editor grows with the window.
+
+- **The library and the bundled prompts answer the keyboard.** The arrow keys
+  walk the list without leaving the search box, Enter uses the lit record -- or
+  picks the lit preset -- and a double click does the same. Both open scrolled to
+  what the node is pointed at, preset #850 of the thousand included.
+
+- **A line in the footer says what happened.** The library counts its prompts, or
+  how many a search has left, and says what an edit or a delete did. The Model
+  list counts the entries and says what was saved, deleted or put back, and how
+  many nodes in this graph moved to an entry's new label. All of this used to go
+  to the browser console, where nobody saw it.
+
+### Changed
+
+- **Nothing typed is thrown away without a question.** Escape or Cancel in the
+  prompt editor, in "Save the last prompt" and in the Model list's entry form
+  asks before closing on unsaved typing, and closes at once when nothing was
+  typed. Escape is ignored while a save is on its way. "Save the last prompt" no
+  longer closes on a click beside it.
+
+- **Delete in the library asks first.** The record is gone for good -- the
+  library keeps no other copy -- and the question says so, and says when the
+  node's own choice goes with it.
+
+- **Questions and failures come in the pack's own windows** rather than the
+  browser's `alert` and `confirm` boxes. A dangerous question starts on Cancel,
+  so a reflexive Enter does not answer it.
+
+- **A change made from a window counts at once.** ComfyUI looks for changes on
+  mouseup, which comes before the click, so Use in the library, an edited answer
+  switching `repeat_last` on, an `+ instr` question set with its button and the
+  like marked the workflow as modified only at the next click -- and Ctrl+Z took
+  them back together with whatever came next. They now count straight away, one
+  step each. Typing in a LoRA Triggers row counts as one step when the field is
+  left, rather than one per letter.
+
+- The Model list's entry form no longer underlines repository ids as spelling
+  mistakes or offers the browser's typing history.
+
+### Fixed
+
+- **Deleting a model entry no longer clears the nodes that use it.** With nothing
+  on disk to fall back to, the server leaves those nodes holding the old name, so
+  that a run says the entry is gone rather than picking another model for them --
+  and the window then wrote an empty value into them anyway. They keep the name
+  now, and the footer says how many do.
+
+- **A server that cannot be reached no longer leaves a window stuck.** Every
+  request from the windows now comes back with an answer while ComfyUI restarts
+  or is gone, so a Save button no longer stays greyed out for good. "New prompt
+  file" says why a file was not made, "Edit the last prompt" says why the answer
+  could not be read instead of opening an empty editor, a library that could not
+  be read says so instead of "This set is empty", and the bundled prompts try
+  again on the next open instead of remembering the failure.
+
+- **"Opened" on the Open models.json button** appears only when the file did
+  open, and Open guide folder says so too.
+
 ## 0.27.1 - 2026-09-29
 
 ### Fixed

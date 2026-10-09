@@ -1,6 +1,7 @@
 import { app } from "../../scripts/app.js";
 import {
     buttonRow,
+    graphChanged,
     installBaseStyle,
     installStyle,
     onRefresh,
@@ -160,7 +161,9 @@ function writeList(node, list, quiet) {
     if (state) state.quiet = true;
     widget.value = JSON.stringify(list);
     if (state) state.quiet = false;
-    if (!quiet) redraw(node);
+    if (quiet) return;
+    redraw(node);
+    graphChanged();
 }
 
 let dismiss = null;
@@ -305,6 +308,7 @@ function field(className, value, placeholder, tooltip, onType) {
     input.addEventListener("pointerdown", (event) => event.stopPropagation());
     input.addEventListener("keydown", (event) => event.stopPropagation());
     input.addEventListener("input", () => onType(input.value));
+    input.addEventListener("change", graphChanged);
     return input;
 }
 

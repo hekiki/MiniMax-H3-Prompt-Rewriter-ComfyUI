@@ -2228,7 +2228,9 @@ chips, or type in the search box to keep only the records whose name, descriptio
 prompt, groups, references or settings contain what you typed. **Use** points the
 node at a record; **Copy** puts the prompt on the clipboard without pointing the
 node at anything; **Edit** opens it for changing; **Delete** removes it from the
-file for good.
+file for good, after asking. The list answers the keyboard too: the arrow keys walk
+it without leaving the search box, Enter uses the lit record, and a double click on
+a card does the same. It opens scrolled to the record this node is pointed at.
 
 ![The prompt library window, titled “Prompt library” over the line “Hand a saved prompt straight to this node’s output. No model is loaded.”: a search box across the top reading “Search names, descriptions, prompts, references” with the file dropdown beside it on `global`, and four group chips under it — bakery, dinosaur, fish, joke. First the node’s own Last Prompt row, its Use and Copy greyed out beneath “Nothing kept yet. Run this node once and its answer is what gets saved.” Then two saved records: “Дино и пеламида”, three thumbnails down its left and the line Ref2VA · 16:9 · 10s · 3 images + 1 audio · joke, dinosaur, fish above its description and the opening of its subject_definitions; and “Дино”, one thumbnail and the line I2VA · 16:9 · 15s · 1 image · joke, bakery, dinosaur, its card tinted blue because that is the record this node is pointed at. Use, Copy and Delete run down the right of every row, and Write a new one and Close sit at the foot of the window](docs/prompt_library.png)
 
@@ -2240,6 +2242,11 @@ being shown no longer matches; the thumbnails beside it say which pictures those
 were. The tinted card is the current choice. The Last Prompt row sits above the
 file because it is not in it — it is this session’s own answer, which is why it
 has no **Delete**.*
+
+The library, the editor, the **Model list** and the bundled prompts size like any
+window: drag an edge or a corner, or fill the browser tab with the button in the top
+corner, and each kind remembers its own size. The footer says how many records the
+file holds, or how many a search has left, and what the last edit or delete did.
 
 A chosen prompt reaches `rewritten_prompt` and the section outputs exactly as a
 fresh one would — no model is loaded, nothing is generated, and the run takes about
@@ -2258,6 +2265,10 @@ answer and out of the same module, and against this record's own task, duration 
 references: a cut time that has drifted past the end of the video is named while you
 are still looking at it. That is the reason to edit here rather than in the JSON
 file — the file will take anything.
+
+Escape and **Cancel** ask before they throw away anything typed, here and in the
+other boxes that take typing — **Save the last prompt** and the entry form of the
+**Model list**. With nothing typed they just close.
 
 ![The edit window, titled “Edit a saved prompt” over the line “The prompt itself, and what the card says about it. What produced this record -- the writer, the settings, the references -- stays as it was.”: a Name box reading “Дино и пеламида (changed)”, a Description under it, then four group chips with joke, dinosaur and fish lit and bakery not, an empty “New group, then Enter” box, and the prompt itself in a monospaced box open at subject_definitions and summary. Beneath it the self-check — “Self-check: 2 warning(s), 1 note(s)” over two amber lines, one saying &lt;Video 1&gt; is cited but no video reached this node and one saying &lt;Picture 2&gt; and &lt;Picture 3&gt; are connected but never cited, and a grey one saying detailed_description is 147 words where the guide suggests 350-500. At the foot the record’s own account, MiniMaxH3UniversalWriter · Ref2VA · 16:9 · 10s · 3 images + 1 audio · saved 29.08.2026, 15:07:10 · edited 01.09.2026, 11:07:04, with the four reference thumbnails below it, and Cancel and Save changes in the corner](docs/prompt_library_edit.png)
 
@@ -2373,6 +2384,11 @@ Universal Rewriter opens on three and the reference captioner on one. What the
 list requires sits above the entries, because it is the reason an entry belongs
 in this list and not another one.*
 
+The footer counts the entries in the open list and says what the last save,
+delete or restore did — including how many nodes in this graph moved to an entry's
+new label, or still hold the name of one that is gone. Those keep the name, so that
+a run says the entry is missing rather than picking another model for them.
+
 **Check it** answers as much as can be answered without moving any weights. A
 file already on this machine is read outright, so it reports the architecture and
 the shape, whether the model carries a chat template, and whether the projector
@@ -2400,6 +2416,17 @@ otherwise surface as a download failing minutes in, and fills in `download_gb`
 for you while it is there. A GGUF's shape and chat template are in the file
 itself, so for one still on the Hub those wait for the first run — or for Check
 it again once the file is here.
+
+Leave `file` empty and **Check it** answers a different question: what is in that
+repository? It lists the GGUF files as buttons, smallest first. A click puts the
+file into the form, and a name in the style of the packaged entries —
+`Qwen2.5-Omni-7B Q4_K_M` — while you have not typed one of your own. A list that
+runs a pair shows the projectors in a row of their own, for `mmproj`, and fills one
+in by itself when the repository holds only one; once both halves are there the
+check runs and adds up the download. A model split into parts,
+`-00001-of-00003.gguf`, is counted and left out, because an entry names one file
+and only that file is downloaded. A folder on this machine in `repo` is listed the
+same way, and a file name the repository does not have brings up the same buttons.
 
 Two things the window will not do. It refuses a **network path** in `repo`,
 `file` or `mmproj`: it is reachable over the ComfyUI API, which has no CSRF

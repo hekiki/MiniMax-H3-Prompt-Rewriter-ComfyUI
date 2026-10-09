@@ -117,7 +117,17 @@ def _current_labels(asked: dict) -> dict:
 
 
 def _check_entry(section: str, raw: dict) -> dict:
-    """Probe one entry. Cleaned first, so a network path is refused before it is read."""
+    """Probe one entry. Cleaned first, so a network path is refused before it is read.
+
+    A GGUF entry with a repository and no file yet is a question rather than an
+    entry: what is in there? It is answered with the files to pick from, before
+    the cleaning that would refuse it for having no file -- or no name.
+    """
+    found = model_sections.spec(section)
+    fmt = str(raw.get("format") or found.default_format).strip().lower()
+    repo = str(raw.get("repo") or "").strip()
+    if fmt == catalog.FORMAT_GGUF and repo and not str(raw.get("file") or "").strip():
+        return {"ok": True, "label": "", **model_sections.repo_files(section, repo)}
     entry = model_sections.clean_entry(section, raw)
     found = model_sections.check(section, entry)
     return {"ok": True, "label": catalog.entry_label(entry), **found}

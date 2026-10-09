@@ -1,7 +1,6 @@
 import { app } from "../../scripts/app.js";
-import { api } from "../../scripts/api.js";
 import { buttonRow, installStyle, setWidgetValue, told, widgetNamed } from "./mmx_controls.js";
-import { ask, element, frame } from "./prompt_library.js";
+import { ask, confirmed, element, footNote, frame, mayClose, warned } from "./mmx_window.js";
 
 const NODE_SECTIONS = {
     MiniMaxH3PromptRewriter: [["model", "models"]],
@@ -31,8 +30,11 @@ const GUIDE_NODES = [
 ];
 
 const ROOT = "/minimax_h3_rewriter/model_list";
-const OPEN_FILE = "/minimax_h3_rewriter/open_model_list";
-const FILE_FALLBACK = "ComfyUI/user/minimax_h3_rewriter/models.json";
+const LIST_FILE = {
+    url: "/minimax_h3_rewriter/open_model_list",
+    what: "the model list",
+    fallback: "ComfyUI/user/minimax_h3_rewriter/models.json",
+};
 
 const LIST_LABEL = "Model list";
 const LIST_TOOLTIP =
@@ -100,6 +102,17 @@ const STYLE = `
 .mmxmod-good { color: #7FB77F; }
 .mmxmod-busy, .mmxmod-note { color: var(--descrip-text, #999); }
 .mmxmod-tag.mmxmod-here { color: #7FB77F; border-color: #7FB77F; }
+
+.mmxmod-picks-head { font-size: 10px; color: var(--descrip-text, #999); margin: 10px 0 4px;
+    text-transform: uppercase; letter-spacing: 0.04em; }
+.mmxmod-chips { display: flex; flex-wrap: wrap; gap: 4px; max-height: 150px; overflow: auto; }
+.mmxmod-chip { font: inherit; font-size: 11px; padding: 3px 9px; border-radius: 999px;
+    cursor: pointer; text-align: left; word-break: break-all;
+    color: var(--input-text, #ddd); background: var(--comfy-input-bg, #2b2b2b);
+    border: 1px solid var(--border-color, #4e4e4e); }
+.mmxmod-chip:hover { border-color: #3B7DD8; }
+.mmxmod-chip span { margin-left: 6px; opacity: 0.65; white-space: nowrap; }
+.mmxmod-chip.mmxmod-on { background: #3B7DD8; border-color: #3B7DD8; color: #fff; }
 `;
 
 function eachGraphNode(graph, visit) {
@@ -127,16 +140,20 @@ function applyChoices(choices) {
 
 function repoint(section, before, after) {
     if (!before || before === after) return 0;
-    let moved = 0;
+    let count = 0;
     eachGraphNode(app.graph, (item) => {
         for (const [widget, owns] of NODE_SECTIONS[item.type] || []) {
             if (owns !== section) continue;
             if (widgetNamed(item, widget)?.value !== before) continue;
-            setWidgetValue(item, widget, after);
-            moved += 1;
+            if (after) setWidgetValue(item, widget, after);
+            count += 1;
         }
     });
-    return moved;
+    return count;
+}
+
+function nodeCount(count) {
+    return count === 1 ? "1 node" : `${count} nodes`;
 }
 
 async function refreshDefinitions() {
@@ -210,56 +227,19 @@ function renderLines(holder, lines) {
     }
 }
 
-async function openTheFile() {
-    let response;
-    try {
-        response = await api.fetchApi(OPEN_FILE, { method: "POST" });
-    } catch (error) {
-        alert(`Could not reach the ComfyUI server: ${error}`);
-        return;
-    }
-    let payload = {};
-    try {
-        payload = await response.json();
-    } catch (error) {
-        payload = {};
-    }
-    if (!response.ok || !payload.ok) {
-        alert(
-            "Could not open the model list.\n\n" +
-                (payload.error || `HTTP ${response.status}`) +
+async function reveal(target) {
+    const { ok, status, payload } = await ask(target.url, {});
+    if (!ok || !payload.ok) {
+        await warned(
+            (payload.error || `HTTP ${status}`) +
                 "\n\nOpen it by hand instead:\n" +
-                (payload.path || FILE_FALLBACK)
+                (payload.path || target.fallback),
+            { title: `Could not open ${target.what}` }
         );
-        return;
+        return false;
     }
     console.log(`[MiniMax-H3 Prompt Rewriter] opened ${payload.path}`);
-}
-
-async function openGuideFolder() {
-    let response;
-    try {
-        response = await api.fetchApi(GUIDE_FOLDER.url, { method: "POST" });
-    } catch (error) {
-        alert(`Could not reach the ComfyUI server: ${error}`);
-        return;
-    }
-    let payload = {};
-    try {
-        payload = await response.json();
-    } catch (error) {
-        payload = {};
-    }
-    if (!response.ok || !payload.ok) {
-        alert(
-            `Could not open ${GUIDE_FOLDER.what}.\n\n` +
-                (payload.error || `HTTP ${response.status}`) +
-                "\n\nOpen it by hand instead:\n" +
-                (payload.path || GUIDE_FOLDER.fallback)
-        );
-        return;
-    }
-    console.log(`[MiniMax-H3 Prompt Rewriter] opened ${payload.path}`);
+    return true;
 }
 
 /** A captioned text box, wrapped so a grid lays out whole fields and not halves. */
@@ -268,6 +248,8 @@ function textField(holder, caption, value, hint) {
     wrap.appendChild(element("label", "mmxlib-field", caption));
     const box = document.createElement("input");
     box.type = "text";
+    box.spellcheck = false;
+    box.autocomplete = "off";
     box.value = value === undefined || value === null ? "" : String(value);
     if (hint) box.placeholder = hint;
     wrap.appendChild(box);
@@ -276,7 +258,7 @@ function textField(holder, caption, value, hint) {
 }
 
 function openEntryForm(section, held, onSaved) {
-    const { panel, close } = frame(false, { sticky: true });
+    const { panel, close, handle } = frame(false, { sticky: true });
     const editing = Boolean(held?.name);
 
     panel.appendChild(
@@ -309,7 +291,12 @@ function openEntryForm(section, held, onSaved) {
         "unsloth/Qwen3.5-4B-GGUF"
     );
     const fileRow = element("div", "");
-    const file = textField(fileRow, "File inside the repository", held?.file, "Qwen3.5-4B-Q4_K_M.gguf");
+    const file = textField(
+        fileRow,
+        "File inside the repository -- or leave it empty and Check it, to pick one",
+        held?.file,
+        "Qwen3.5-4B-Q4_K_M.gguf"
+    );
     panel.appendChild(fileRow);
 
     const projRow = element("div", "");
@@ -334,9 +321,16 @@ function openEntryForm(section, held, onSaved) {
     const said = element("div", "mmxmod-found");
     panel.appendChild(said);
 
+    const picks = element("div", "mmxmod-picks");
+    panel.appendChild(picks);
+
     const row = element("div", "mmxlib-row");
     const trouble = element("div", "mmxlib-problem");
     const probe = element("button", "", "Check it");
+    probe.title =
+        "Reads the files if they are on this machine, or asks Hugging Face whether the " +
+        "repository has them and how big they are. With a repository and no file yet, " +
+        "lists the GGUF files in it to pick from.";
     const cancel = element("button", "", "Cancel");
     const keep = element("button", "mmxlib-go", "Save");
     row.append(trouble, probe, cancel, keep);
@@ -360,6 +354,7 @@ function openEntryForm(section, held, onSaved) {
         const gguf = format === "gguf";
         fileRow.hidden = !gguf;
         projRow.hidden = !gguf || section.mmproj === "unused";
+        picks.hidden = !gguf;
         shown.textContent = previewLabel(values()) || "(nothing yet)";
 
         moved.replaceChildren();
@@ -386,7 +381,81 @@ function openEntryForm(section, held, onSaved) {
     }
     redraw();
 
-    probe.addEventListener("click", async () => {
+    const start = JSON.stringify(values());
+    async function leave() {
+        if (keep.disabled) return;
+        if (await mayClose(JSON.stringify(values()) !== start)) close();
+    }
+    handle.onEscape = leave;
+
+    let named = "";
+    let sized = "";
+    let listed = "";
+
+    function ours(box, filled) {
+        return !box.value.trim() || box.value === filled;
+    }
+
+    function chipGroup(caption, offers, box, take) {
+        if (!offers?.length) return;
+        picks.appendChild(element("div", "mmxmod-picks-head", caption));
+        const chips = element("div", "mmxmod-chips");
+        for (const one of offers) {
+            const chip = element("button", "mmxmod-chip", one.file);
+            chip.type = "button";
+            chip.dataset.file = one.file;
+            chip.appendChild(element("span", "", `${one.gb} GB`));
+            chip.title = box === file ? `Use this model -- '${one.name}'` : "Use this projector";
+            chip.addEventListener("click", () => take(one));
+            chips.appendChild(chip);
+        }
+        chips.mmxField = box;
+        picks.appendChild(chips);
+    }
+
+    function markPicked() {
+        for (const chips of picks.querySelectorAll(".mmxmod-chips")) {
+            for (const chip of chips.children) {
+                chip.classList.toggle("mmxmod-on", chip.dataset.file === chips.mmxField.value.trim());
+            }
+        }
+    }
+
+    function offer(payload) {
+        if (!payload.files && !payload.projectors) return;
+        listed = repo.value.trim();
+        picks.replaceChildren();
+        chipGroup("Models in it", payload.files, file, (one) => {
+            file.value = one.file;
+            if (ours(name, named)) name.value = named = one.name;
+            const sole = payload.projectors?.length === 1 ? payload.projectors[0].file : "";
+            if (sole && section.mmproj !== "unused" && !mmproj.value.trim()) mmproj.value = sole;
+            picked();
+        });
+        if (section.mmproj !== "unused") {
+            chipGroup("Projectors -- for mmproj", payload.projectors, mmproj, (one) => {
+                mmproj.value = one.file;
+                picked();
+            });
+        }
+        markPicked();
+    }
+
+    function picked() {
+        if (ours(size, sized)) size.value = sized = "";
+        redraw();
+        markPicked();
+        const needs = section.mmproj === "required";
+        if (!file.value.trim()) {
+            renderLines(said, [{ level: "note", text: "Now pick the model." }]);
+        } else if (needs && !mmproj.value.trim()) {
+            renderLines(said, [{ level: "note", text: "Now pick its projector." }]);
+        } else {
+            runCheck();
+        }
+    }
+
+    async function runCheck() {
         probe.disabled = true;
         renderLines(said, [{ level: "busy", text: "Looking..." }]);
         const { payload } = await ask("/minimax_h3_rewriter/model_list/check", {
@@ -399,13 +468,33 @@ function openEntryForm(section, held, onSaved) {
             return;
         }
         renderLines(said, payload.lines);
-        if (payload.download_gb && !size.value.trim()) {
-            size.value = String(payload.download_gb);
+        offer(payload);
+        if (!payload.download_gb) return;
+        if (ours(size, sized)) {
+            size.value = sized = String(payload.download_gb);
             redraw();
+        } else if (Math.abs(Number(size.value.trim()) - payload.download_gb) > 0.01) {
+            said.appendChild(
+                element(
+                    "div",
+                    "mmxmod-warn",
+                    `- The files come to ${payload.download_gb} GB and the form says ` +
+                        `${size.value.trim()}. Saving keeps what the form says.`
+                )
+            );
+        }
+    }
+
+    probe.addEventListener("click", runCheck);
+    repo.addEventListener("input", () => {
+        if (listed && repo.value.trim() !== listed) {
+            listed = "";
+            picks.replaceChildren();
         }
     });
+    for (const box of [file, mmproj]) box.addEventListener("input", markPicked);
 
-    cancel.addEventListener("click", close);
+    cancel.addEventListener("click", leave);
     keep.addEventListener("click", async () => {
         keep.disabled = true;
         trouble.textContent = "";
@@ -421,22 +510,20 @@ function openEntryForm(section, held, onSaved) {
         }
         applyChoices(payload.choices);
         const carried = repoint(section.key, payload.label_before, payload.label_after);
-        if (carried) {
-            console.log(
-                `[MiniMax-H3 Prompt Rewriter] moved ${carried} widget(s) to ` +
-                    `'${payload.label_after}'`
-            );
-        }
         await heal();
         close();
-        onSaved();
+        onSaved(
+            `${editing ? "Saved" : "Added"} '${payload.label_after}'.` +
+                (carried ? ` ${nodeCount(carried)} in this graph moved to the new label.` : "")
+        );
         refreshDefinitions();
     });
 
     name.focus();
 }
 
-function entryCard(section, held, reload, writable) {
+/** One entry of a list. `done(text)` is told what an edit or a delete did. */
+function entryCard(section, held, done, writable) {
     const card = element("div", "mmxmod-card");
     const body = element("div", "mmxmod-body");
 
@@ -460,7 +547,7 @@ function entryCard(section, held, reload, writable) {
 
     const acts = element("div", "mmxmod-acts");
     const change = element("button", "", "Edit");
-    change.addEventListener("click", () => openEntryForm(section, held, reload));
+    change.addEventListener("click", () => openEntryForm(section, held, done));
     const drop = element("button", "mmxmod-drop", "Delete");
     drop.addEventListener("click", async () => {
         const coming = held.seeded
@@ -471,9 +558,12 @@ function entryCard(section, held, reload, writable) {
               "graph that use the entry move to that row."
             : "Nodes that use it keep it until another model is picked, and a run before " +
               "then stops and says so rather than picking one for you.";
-        if (!confirm(`Delete '${held.label}' from ${section.title}?\n\n${coming}\n\n${after}`)) {
-            return;
-        }
+        const sure = await confirmed(`${coming}\n\n${after}`, {
+            title: `Delete '${held.label}' from ${section.title}?`,
+            ok: "Delete",
+            danger: true,
+        });
+        if (!sure) return;
         drop.disabled = true;
         const { payload } = await ask("/minimax_h3_rewriter/model_list/delete", {
             section: section.key,
@@ -481,18 +571,18 @@ function entryCard(section, held, reload, writable) {
         });
         if (!payload.ok) {
             drop.disabled = false;
-            alert(payload.error || "That entry could not be deleted.");
+            await warned(payload.error || "That entry could not be deleted.");
             return;
         }
         applyChoices(payload.choices);
         const carried = repoint(section.key, payload.label_before, payload.label_after);
-        if (carried) {
-            console.log(
-                `[MiniMax-H3 Prompt Rewriter] moved ${carried} widget(s) to ` +
-                    `'${payload.label_after}'`
-            );
-        }
-        reload();
+        const fate = !carried
+            ? ""
+            : payload.label_after
+              ? ` ${nodeCount(carried)} in this graph moved to '${payload.label_after}'.`
+              : ` ${nodeCount(carried)} in this graph ${carried === 1 ? "names" : "name"} ` +
+                "it still, and a run there stops until another model is picked.";
+        done(`Deleted '${held.label || held.name}'.${fate}`);
         refreshDefinitions();
     });
     if (!writable) {
@@ -517,7 +607,7 @@ function scannedCard(text) {
 
 function openModelList(node) {
     installStyle(STYLE_ID, STYLE);
-    const { panel, close } = frame(true);
+    const { panel, close } = frame(true, { size: "models" });
     panel.classList.add("mmxmod-panel");
 
     panel.appendChild(element("h3", "mmxlib-title", "Model list"));
@@ -538,8 +628,20 @@ function openModelList(node) {
     const cards = element("div", "mmxlib-list");
     panel.appendChild(cards);
 
+    let payload = null;
+    let at = 0;
+
     const row = element("div", "mmxlib-row");
-    const trouble = element("div", "mmxlib-problem");
+    const said = footNote(() => {
+        const section = current();
+        if (!section) return "";
+        const entries = section.entries.length;
+        const found = section.found.length;
+        return (
+            (entries === 1 ? "1 entry" : `${entries} entries`) +
+            (found ? ` ${MIDDLE_DOT} ${found} more found on disk` : "")
+        );
+    });
     const adding = element("button", "mmxlib-go", "Add a model");
     const restoring = element("button", "", "Restore the packaged entries");
     const opening = element("button", "", "Open models.json");
@@ -553,14 +655,16 @@ function openModelList(node) {
         "step as you edit, so this is only needed if one looks stale -- after a model was " +
         "copied into a folder by hand, or the list was edited from another browser tab.";
     const shutting = element("button", "", "Close");
-    row.append(trouble, adding, restoring, opening, reloading, shutting);
+    row.append(said.holder, adding, restoring, opening, reloading, shutting);
     panel.appendChild(row);
-
-    let payload = null;
-    let at = 0;
 
     function current() {
         return payload?.sections?.[at] || null;
+    }
+
+    function after(text) {
+        said.say(text);
+        load();
     }
 
     function draw() {
@@ -571,6 +675,7 @@ function openModelList(node) {
                 const tab = element("div", "mmxmod-tab" + (index === at ? " mmxmod-on" : ""), one.title);
                 tab.addEventListener("click", () => {
                     at = index;
+                    said.say("");
                     draw();
                 });
                 tabs.appendChild(tab);
@@ -587,7 +692,7 @@ function openModelList(node) {
         about.appendChild(needs);
 
         for (const held of section.entries) {
-            cards.appendChild(entryCard(section, held, load, payload.writable));
+            cards.appendChild(entryCard(section, held, after, payload.writable));
         }
         if (!section.entries.length) {
             cards.appendChild(
@@ -613,23 +718,24 @@ function openModelList(node) {
             ? `Offer these again: ${section.restorable.join(", ")}`
             : "Every entry the pack ships with is already in this list.";
         adding.disabled = !payload.writable;
-        trouble.textContent = payload.problem || "";
+        said.paint();
     }
 
     async function load() {
         const answer = await ask(`${ROOT}?node=${encodeURIComponent(node.type)}`);
         if (!answer.payload?.ok) {
-            trouble.textContent = answer.payload?.error || "The model list could not be read.";
+            said.stand(answer.payload?.error || "The model list could not be read.");
             return;
         }
         payload = answer.payload;
+        said.stand(payload.problem || "");
         if (at >= payload.sections.length) at = 0;
         draw();
     }
 
     adding.addEventListener("click", () => {
         const section = current();
-        if (section) openEntryForm(section, null, load);
+        if (section) openEntryForm(section, null, after);
     });
     restoring.addEventListener("click", async () => {
         const section = current();
@@ -639,18 +745,18 @@ function openModelList(node) {
             section: section.key,
         });
         if (!answer.payload.ok) {
-            trouble.textContent = answer.payload.error || "Those could not be restored.";
+            said.say(answer.payload.error || "Those could not be restored.", true);
             restoring.disabled = false;
             return;
         }
         applyChoices(answer.payload.choices);
         await heal();
-        load();
+        const back = answer.payload.restored || [];
+        after(back.length ? `Put back: ${back.join(", ")}.` : "Nothing was missing.");
         refreshDefinitions();
     });
-    opening.addEventListener("click", () => {
-        openTheFile();
-        told(opening, "Opened");
+    opening.addEventListener("click", async () => {
+        if (await reveal(LIST_FILE)) told(opening, "Opened");
     });
     reloading.addEventListener("click", async () => {
         reloading.disabled = true;
@@ -658,7 +764,7 @@ function openModelList(node) {
             await app.refreshComboInNodes();
             told(reloading, "Reloaded");
         } catch (error) {
-            trouble.textContent = `Could not reload the node definitions: ${error}`;
+            said.say(`Could not reload the node definitions: ${error}`, true);
         }
         reloading.disabled = false;
     });
@@ -688,7 +794,9 @@ function addButtons(nodeType, nodeData) {
             wanted.push({
                 label: GUIDE_FOLDER.label,
                 tooltip: GUIDE_FOLDER.tooltip,
-                onClick: () => openGuideFolder(),
+                onClick: async (button) => {
+                    if (await reveal(GUIDE_FOLDER)) told(button, "Opened");
+                },
             });
         }
         buttonRow(this, "mmx_open", wanted);

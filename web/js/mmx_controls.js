@@ -161,12 +161,33 @@ export function widgetValues(node, name) {
     return widgetNamed(node, name)?.options?.values ?? [];
 }
 
+let telling = false;
+
+export function graphChanged() {
+    if (telling) return;
+    telling = true;
+    queueMicrotask(() => {
+        telling = false;
+        try {
+            const tracker = app.extensionManager?.workflow?.activeWorkflow?.changeTracker;
+            if (tracker?.captureCanvasState) tracker.captureCanvasState();
+            else tracker?.checkState?.();
+        } catch (error) {
+            console.error(
+                "[MiniMax-H3 Prompt Rewriter] the workflow was not told that its graph changed",
+                error
+            );
+        }
+    });
+}
+
 export function setWidgetValue(node, name, value) {
     const widget = widgetNamed(node, name);
     if (!widget || widget.value === value) return;
     widget.value = value;
     widget.callback?.(value, app.canvas, node);
     refresh(node);
+    graphChanged();
 }
 
 export function showWidget(node, name, shown) {

@@ -1937,7 +1937,9 @@ ComfyUI 自己的缓存做不到这件事。一个节点的缓存键是它的类
 是文件里的一切，新的在前。用那些小标签按分组过滤，或者在搜索框里打字，只留下名字、
 说明、提示词、分组、参考素材或者设置里含有你所打内容的那些记录。**Use** 把节点指向
 一条记录；**Copy** 只把提示词放进剪贴板，不把节点指向任何东西；**Edit** 打开它以供
-修改；**Delete** 把它从文件里永久删掉。
+修改；**Delete** 把它从文件里永久删掉，删之前会先问一句。这份列表也听键盘的：方向键
+在列表里上下走，光标不用离开搜索框；回车用上亮着的那条记录，双击一张卡片也一样。
+列表打开时会滚到这个节点当前指向的那条记录。
 
 ![提示词库窗口，标题 “Prompt library”，底下一行 “Hand a saved prompt straight to this node’s output. No model is loaded.”：顶上横着一个搜索框，写着 “Search names, descriptions, prompts, references”，旁边是文件下拉框，停在 `global`，再下面是四个分组小标签 —— bakery、dinosaur、fish、joke。最上面是这个节点自己的 Last Prompt 那一行，它的 Use 和 Copy 是灰的，底下写着 “Nothing kept yet. Run this node once and its answer is what gets saved.”。然后是两条保存下来的记录：“Дино и пеламида”，左边三张缩略图，上方一行 Ref2VA · 16:9 · 10s · 3 images + 1 audio · joke, dinosaur, fish，下面是它的说明和 subject_definitions 的开头；以及 “Дино”，一张缩略图和一行 I2VA · 16:9 · 15s · 1 image · joke, bakery, dinosaur，它的卡片被染成蓝色，因为这个节点当前指向的正是这条记录。每一行的右边都是 Use、Copy 和 Delete，而窗口底部是 Write a new one 和 Close](docs/prompt_library.png)
 
@@ -1947,6 +1949,11 @@ ComfyUI 自己的缓存做不到这件事。一个节点的缓存键是它的类
 说法；旁边的缩略图则说清那些图片究竟是哪几张。被染色的卡片是当前的选择。Last Prompt
 那一行排在文件之上，因为它不在文件里 —— 它是这一次会话自己的答案，所以它没有
 **Delete**。*
+
+提示词库、编辑器、**Model list** 和内置提示词这几个窗口，都能像普通窗口一样改变
+大小：拖边或者拖角，或者用右上角的按钮铺满整个浏览器标签页；每一种窗口各自记住
+自己的尺寸。窗口底部写着文件里有多少条记录、一次搜索之后还剩多少条，以及上一次
+编辑或删除做了什么。
 
 被选中的提示词抵达 `rewritten_prompt` 和那些分节输出的方式，和一段新写的一模一样
 —— 不加载模型，不生成任何东西，跑一次大约十分之一秒。由另一种节点写下的记录也能用：
@@ -1962,6 +1969,10 @@ ComfyUI 自己的缓存做不到这件事。一个节点的缓存键是它的类
 并且是对着这条记录自己的任务、时长和参考素材来检查的：一个已经漂到视频结尾之外的
 切点时间，会在你还盯着它的时候就被点出来。这就是该在这里编辑、而不是去改那个 JSON
 文件的理由 —— 那个文件什么都收。
+
+Escape 和 **Cancel** 在丢掉任何已经打进去的内容之前都会先问一句 —— 这里如此，其他
+要打字的窗口也一样：**Save the last prompt** 和 **Model list** 的条目表单。什么都
+没打的时候，它们直接关掉。
 
 ![编辑窗口，标题 “Edit a saved prompt”，底下一行 “The prompt itself, and what the card says about it. What produced this record -- the writer, the settings, the references -- stays as it was.”：一个 Name 框写着 “Дино и пеламида (changed)”，下面是 Description，然后是四个分组小标签，joke、dinosaur 和 fish 亮着，bakery 没亮，一个空的 “New group, then Enter” 框，以及提示词本身 —— 摆在一个等宽字体的框里，正停在 subject_definitions 和 summary 上。它下面是自检 —— “Self-check: 2 warning(s), 1 note(s)” 之下两行琥珀色，一行说 &lt;Video 1&gt; 被引用了，可是没有任何视频到过这个节点，另一行说 &lt;Picture 2&gt; 和 &lt;Picture 3&gt; 接上了却从未被引用，还有一行灰色的说 detailed_description 只有 147 词，而指南建议 350-500 词。窗口底部是这条记录自己的账目，MiniMaxH3UniversalWriter · Ref2VA · 16:9 · 10s · 3 images + 1 audio · saved 29.08.2026, 15:07:10 · edited 01.09.2026, 11:07:04，底下是四张参考素材缩略图，角落里是 Cancel 和 Save changes](docs/prompt_library_edit.png)
 
@@ -2062,6 +2073,10 @@ ComfyUI 模型目录里或者一个 Ollama 仓库里：那些同样会出现在�
 参考素材描述节点是一个。这份列表的要求排在条目上方，因为正是它决定了一个条目属于
 这份列表，而不属于另一份。*
 
+窗口底部数着当前这份列表里的条目，并说出上一次保存、删除或恢复做了什么 —— 包括
+这张图里有多少个节点换到了条目的新标签上，或者还握着一个已经删掉的条目的名字。
+这些节点会留着那个名字，好让运行时直接说这个条目没了，而不是替它们挑另一个模型。
+
 **Check it** 会把在不挪动任何权重的前提下能回答的都回答掉。已经在这台机器上的文件会
 被直接读出来，所以它报得出架构和形状、模型带没带聊天模板，也说得出那个投影器带没带
 视觉和音频：
@@ -2085,6 +2100,14 @@ ChatML，所以在那边缺了模板只是一条警告。
 之后才浮出水面；顺手还替你把 `download_gb` 填上。GGUF 的形状和聊天模板都在文件本身
 里，所以对一个还在 Hub 上的文件，这两样要等到第一次运行 —— 或者等文件下好之后再点一次
 Check it。
+
+把 `file` 留空，**Check it** 回答的就是另一个问题：这个仓库里有什么？它把仓库里的
+GGUF 文件列成一排按钮，从小到大。点一下，文件就填进表单；如果你还没有自己打名字，
+还会按内置条目的写法填上一个 —— `Qwen2.5-Omni-7B Q4_K_M`。需要成对的列表会把投影器
+单独列成一排，给 `mmproj` 用；仓库里只有一个投影器时它会自己填上，两半都齐了，检查
+就会自动跑一遍，把下载大小加起来。拆成几部分的模型（`-00001-of-00003.gguf`）会被数
+出来，但不列出：一个条目只写一个文件，也只下载那一个文件。`repo` 里写的若是这台
+机器上的一个文件夹，也照样列出来；写了一个仓库里没有的文件名，同样会出现这些按钮。
 
 有两件事这个窗口不做。它拒绝 `repo`、`file` 或者 `mmproj` 里的**网络路径**：这个
 窗口是通过 ComfyUI 的 API 够得着的，而那个 API 没有 CSRF 令牌，还常常挂在

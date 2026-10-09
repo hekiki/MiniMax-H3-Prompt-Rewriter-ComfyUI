@@ -1,4 +1,4 @@
-import { installStyle, refresh, widgetNamed } from "./mmx_controls.js";
+import { graphChanged, installStyle, refresh, widgetNamed } from "./mmx_controls.js";
 import { drawPreview } from "./reference_previews.js";
 
 
@@ -151,6 +151,7 @@ export function writeInstruction(node, name, slot, text, add) {
     if (widget) widget.value = JSON.stringify(map);
     refresh(node);
     node.setDirtyCanvas?.(true, true);
+    graphChanged();
 }
 
 

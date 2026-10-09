@@ -1,5 +1,5 @@
 import { app } from "../../scripts/app.js";
-import { setWidgetValue, widgetNamed } from "./mmx_controls.js";
+import { graphChanged, setWidgetValue, widgetNamed } from "./mmx_controls.js";
 
 export const DURATION_NODES = [
     "MiniMaxH3PromptRewriter",
@@ -74,6 +74,7 @@ async function askForCeiling(node) {
 
     applyDurationCeiling(node);
     node.setDirtyCanvas?.(true, true);
+    graphChanged();
 }
 
 function menuFor(node) {

@@ -1,5 +1,4 @@
 import { app } from "../../scripts/app.js";
-import { api } from "../../scripts/api.js";
 import {
     buttonRow,
     installStyle,
@@ -8,6 +7,17 @@ import {
     told,
     widgetNamed,
 } from "./mmx_controls.js";
+import {
+    ask,
+    confirmed,
+    copy,
+    element,
+    footNote,
+    frame,
+    mayClose,
+    walkable,
+    warned,
+} from "./mmx_window.js";
 import { recordFor } from "./repeat_last.js";
 import { toast } from "./self_check.js";
 
@@ -60,25 +70,6 @@ const NEW_FILE_TOOLTIP =
 
 const STYLE_ID = "minimax-h3-library-style";
 const STYLE = `
-.mmxlib-back { position: fixed; inset: 0; z-index: 1300; display: flex;
-    align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.55);
-    font-family: system-ui, sans-serif; }
-.mmxlib-panel { width: min(560px, 92vw); max-height: 88vh; overflow: auto;
-    background: var(--comfy-menu-bg, #353535); color: var(--input-text, #ddd);
-    border: 1px solid var(--border-color, #4e4e4e); border-radius: 10px;
-    padding: 18px 20px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5); }
-.mmxlib-panel.mmxlib-wide { width: min(760px, 94vw); display: flex;
-    flex-direction: column; overflow: hidden; }
-.mmxlib-title { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
-.mmxlib-sub { font-size: 11px; color: var(--descrip-text, #999); margin: 0 0 14px; }
-.mmxlib-field { display: block; font-size: 11px; color: var(--descrip-text, #999);
-    margin: 12px 0 4px; }
-.mmxlib-panel input[type="text"], .mmxlib-panel textarea, .mmxlib-panel select {
-    width: 100%; box-sizing: border-box; font: inherit; font-size: 13px;
-    padding: 6px 8px; border-radius: 6px; color: var(--input-text, #ddd);
-    background: var(--comfy-input-bg, #2b2b2b);
-    border: 1px solid var(--border-color, #4e4e4e); }
-.mmxlib-panel textarea { resize: vertical; min-height: 58px; }
 .mmxlib-groups { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
 .mmxlib-chip { font-size: 11px; padding: 3px 9px; border-radius: 999px;
     cursor: pointer; user-select: none; background: var(--comfy-input-bg, #2b2b2b);
@@ -98,22 +89,7 @@ const STYLE = `
 .mmxlib-preview { margin-top: 8px; max-height: 96px; overflow: auto;
     white-space: pre-wrap; font-size: 11px; line-height: 15px;
     color: var(--input-text, #ddd); opacity: 0.8; }
-.mmxlib-row { display: flex; gap: 8px; justify-content: flex-end;
-    align-items: center; margin-top: 18px; }
-.mmxlib-row button, .mmxlib-card button { font: inherit; font-size: 13px;
-    padding: 6px 16px; border-radius: 6px; cursor: pointer;
-    color: var(--input-text, #ddd); background: var(--comfy-input-bg, #2b2b2b);
-    border: 1px solid var(--border-color, #4e4e4e); }
-.mmxlib-row button.mmxlib-go, .mmxlib-card button.mmxlib-go {
-    background: #3B7DD8; border-color: #3B7DD8; color: #fff; }
-.mmxlib-row button[disabled] { opacity: 0.5; cursor: not-allowed; }
-.mmxlib-problem { flex: 1 1 auto; font-size: 11px; color: #E08A8A; text-align: left; }
 
-.mmxlib-head { display: flex; gap: 8px; align-items: center; }
-.mmxlib-head input[type="text"] { flex: 1 1 auto; }
-.mmxlib-head select { flex: 0 0 150px; }
-.mmxlib-list { flex: 1 1 auto; overflow: auto; margin-top: 12px;
-    border-top: 1px solid var(--border-color, #4e4e4e); }
 .mmxlib-card { display: flex; gap: 10px; padding: 10px 2px;
     border-bottom: 1px solid var(--border-color, #4e4e4e); }
 .mmxlib-card.mmxlib-on { background: rgba(59, 125, 216, 0.12); }
@@ -129,13 +105,12 @@ const STYLE = `
     -webkit-box-orient: vertical; }
 .mmxlib-acts { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto;
     align-items: stretch; }
-.mmxlib-acts button { padding: 4px 12px; font-size: 12px; }
+.mmxlib-card .mmxlib-acts button { padding: 4px 12px; font-size: 12px; }
 .mmxlib-acts button.mmxlib-drop { color: #E08A8A; }
-.mmxlib-none { padding: 24px 4px; text-align: center; font-size: 12px;
-    color: var(--descrip-text, #999); }
 
-.mmxlib-scroll { flex: 1 1 auto; overflow: auto; padding-right: 6px; }
-.mmxlib-panel textarea.mmxlib-prompt { min-height: 220px; line-height: 1.5;
+.mmxlib-scroll { flex: 1 1 auto; overflow: auto; padding-right: 6px;
+    display: flex; flex-direction: column; }
+.mmxlib-panel textarea.mmxlib-prompt { flex: 1 0 auto; min-height: 220px; line-height: 1.5;
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
 .mmxlib-found { margin-top: 8px; font-size: 11px; line-height: 1.5; }
 .mmxlib-found .mmxlib-warn, .mmxlib-found .mmxlib-note {
@@ -152,59 +127,10 @@ const STYLE = `
 
 const KIND_MARK = { image: "IMG", video: "VID", audio: "SND" };
 
-export async function ask(url, body) {
-    const response = await api.fetchApi(url, {
-        method: body ? "POST" : "GET",
-        headers: body ? { "Content-Type": "application/json" } : undefined,
-        body: body ? JSON.stringify(body) : undefined,
-    });
-    let payload = {};
-    try {
-        payload = await response.json();
-    } catch (error) {
-        payload = {};
-    }
-    return { ok: response.ok, status: response.status, payload };
-}
-
-export function element(tag, className, text) {
-    const made = document.createElement(tag);
-    if (className) made.className = className;
-    if (text !== undefined) made.textContent = text;
-    return made;
-}
-
-const OPEN = [];
-
-export function frame(wide, { onClose, sticky } = {}) {
+function libraryFrame(wide, options) {
+    const made = frame(wide, options);
     installStyle(STYLE_ID, STYLE);
-    const back = element("div", "mmxlib-back");
-    const panel = element("div", "mmxlib-panel" + (wide ? " mmxlib-wide" : ""));
-    back.appendChild(panel);
-    const me = { close };
-    OPEN.push(me);
-
-    function close() {
-        const at = OPEN.indexOf(me);
-        if (at >= 0) OPEN.splice(at, 1);
-        document.removeEventListener("keydown", onKey, true);
-        back.remove();
-        onClose?.();
-    }
-
-    function onKey(event) {
-        if (event.key !== "Escape" || OPEN[OPEN.length - 1] !== me) return;
-        event.stopPropagation();
-        close();
-    }
-
-    panel.addEventListener("keydown", (event) => event.stopPropagation());
-    document.addEventListener("keydown", onKey, true);
-    back.addEventListener("pointerdown", (event) => {
-        if (event.target === back && !sticky) close();
-    });
-    document.body.appendChild(back);
-    return { back, panel, close };
+    return made;
 }
 
 function fileFor(node) {
@@ -256,31 +182,6 @@ function spellShape(references) {
     return [...named, ...rest]
         .map((kind) => `${counts[kind]} ${kind}${counts[kind] > 1 ? "s" : ""}`)
         .join(" + ");
-}
-
-export async function copy(text, button) {
-    const before = button.textContent;
-    try {
-        await navigator.clipboard.writeText(text);
-    } catch (error) {
-        const box = document.createElement("textarea");
-        box.value = text;
-        box.style.position = "fixed";
-        box.style.opacity = "0";
-        document.body.appendChild(box);
-        box.select();
-        try {
-            document.execCommand("copy");
-        } catch (failed) {
-            button.textContent = "Cannot copy";
-            setTimeout(() => (button.textContent = before), 1600);
-            box.remove();
-            return;
-        }
-        box.remove();
-    }
-    button.textContent = "Copied";
-    setTimeout(() => (button.textContent = before), 1600);
 }
 
 function describeRun(record) {
@@ -411,7 +312,7 @@ function openSave(node, button) {
     );
     if (!summary) return;
 
-    const { panel, close } = frame(false);
+    const { panel, close, handle } = libraryFrame(false, { sticky: true });
 
     panel.appendChild(element("h3", "mmxlib-title", "Save the last prompt"));
     panel.appendChild(
@@ -455,15 +356,26 @@ function openSave(node, button) {
     const cancel = element("button", "", "Cancel");
     const save = element("button", "mmxlib-go", "Save");
     take.addEventListener("click", async () => {
-        const { payload } = await ask(
+        const { ok, payload } = await ask(
             `/minimax_h3_rewriter/memory/text?node=${encodeURIComponent(node.id)}`
         );
+        if (!ok) {
+            problem.textContent = payload.error || "the prompt could not be read";
+            return;
+        }
         copy(payload.text || "", take);
     });
     row.append(problem, take, cancel, save);
     panel.appendChild(row);
 
-    cancel.addEventListener("click", close);
+    const typed = () => JSON.stringify([name.value, description.value, [...chosen].sort()]);
+    const start = typed();
+    async function leave() {
+        if (save.disabled) return;
+        if (await mayClose(typed() !== start)) close();
+    }
+    handle.onEscape = leave;
+    cancel.addEventListener("click", leave);
     save.addEventListener("click", async () => {
         save.disabled = true;
         problem.textContent = "";
@@ -479,9 +391,6 @@ function openSave(node, button) {
             save.disabled = false;
             return;
         }
-        console.log(
-            `[MiniMax-H3 Prompt Rewriter] '${result.payload.record.name}' saved to ${file.value}`
-        );
         told(button, `Saved to ${file.value}`);
         close();
     });
@@ -540,8 +449,9 @@ export function openEdit(spec) {
             resolve(answer);
         }
 
-        const { panel, close } = frame(true, {
+        const { panel, close, handle } = libraryFrame(true, {
             sticky: true,
+            size: "edit",
             onClose: () => finish(false),
         });
         panel.appendChild(element("h3", "mmxlib-title", spec.title));
@@ -640,7 +550,15 @@ export function openEdit(spec) {
             pending = setTimeout(look, 500);
         });
 
-        cancel.addEventListener("click", () => finish(false));
+        const typed = () =>
+            JSON.stringify([name.value, description.value, [...chosen].sort(), text.value]);
+        const start = typed();
+        async function leave() {
+            if (save.disabled) return;
+            if (await mayClose(typed() !== start)) finish(false);
+        }
+        handle.onEscape = leave;
+        cancel.addEventListener("click", leave);
         save.addEventListener("click", async () => {
             save.disabled = true;
             problem.textContent = "";
@@ -708,10 +626,6 @@ function editSavedRecord(record, fileName) {
             if (!result.ok || !result.payload.ok) {
                 return { error: result.payload.error || `HTTP ${result.status}` };
             }
-            console.log(
-                `[MiniMax-H3 Prompt Rewriter] '${result.payload.record.name}' edited in ` +
-                    fileName
-            );
             return { value: result.payload.record };
         },
     });
@@ -739,6 +653,12 @@ async function editLastPrompt(node, button) {
         ask(`/minimax_h3_rewriter/memory/text?node=${node_id}`),
         ask(`/minimax_h3_rewriter/references?node=${node_id}`),
     ]);
+    if (!answer.ok) {
+        await warned(answer.payload.error || `HTTP ${answer.status}`, {
+            title: "The kept answer could not be read",
+        });
+        return;
+    }
 
     const pick = pickOf(node);
     const repeating = Boolean(widgetNamed(node, REPEAT)?.value);
@@ -817,8 +737,10 @@ function haystack(record) {
         .toLowerCase();
 }
 
+const LAST_KEY = ":last";
+
 function openLibrary(node, button) {
-    const { panel, close } = frame(true);
+    const { panel, close } = libraryFrame(true, { size: "library" });
     panel.appendChild(element("h3", "mmxlib-title", "Prompt library"));
     panel.appendChild(
         element(
@@ -845,15 +767,28 @@ function openLibrary(node, button) {
     const list = element("div", "mmxlib-list");
     panel.appendChild(list);
 
+    let records = [];
+    let showing = 0;
+    let unread = "";
+    let opened = false;
+    const filters = new Set();
+
     const row = element("div", "mmxlib-row");
-    const problem = element("div", "mmxlib-problem");
+    const said = footNote(() => {
+        if (!records.length) return "";
+        if (showing < records.length) return `${showing} of ${records.length} shown`;
+        return `${records.length} prompt${records.length === 1 ? "" : "s"} in '${file.value}'`;
+    });
     const clear = element("button", "", "Write a new one");
     const shut = element("button", "", "Close");
-    row.append(problem, clear, shut);
+    row.append(said.holder, clear, shut);
     panel.appendChild(row);
 
-    let records = [];
-    const filters = new Set();
+    const walker = walkable(panel, list, {
+        search,
+        row: ".mmxlib-card",
+        take: (lit) => lit.querySelector(".mmxlib-acts button")?.click(),
+    });
 
     function use(pick, repeat) {
         setWidgetValue(node, PICK, pick ? JSON.stringify(pick) : "");
@@ -864,6 +799,7 @@ function openLibrary(node, button) {
 
     function card(record) {
         const holder = element("div", "mmxlib-card");
+        holder.dataset.key = record.id;
         const shots = element("div", "mmxlib-shots");
         for (const reference of (record.references || []).slice(0, 3)) {
             if (!reference.thumb) continue;
@@ -904,6 +840,7 @@ function openLibrary(node, button) {
                 setWidgetValue(node, PICK, JSON.stringify({ ...pick, name: saved.name }));
                 relabel(node);
             }
+            said.say(`Saved '${saved.name || record.id}'.`);
             load();
         });
         const hand = element("button", "", "Copy");
@@ -911,21 +848,35 @@ function openLibrary(node, button) {
         hand.addEventListener("click", () => copy(record.text || "", hand));
         const drop = element("button", "mmxlib-drop", "Delete");
         drop.addEventListener("click", async () => {
+            const pointed = pickOf(node)?.id === record.id;
+            const sure = await confirmed(
+                `It is removed from '${file.value}' for good -- the library keeps no other ` +
+                    "copy of it." +
+                    (pointed
+                        ? "\n\nThis node is pointed at it, and that choice is cleared with it."
+                        : ""),
+                { title: `Delete '${record.name || record.id}'?`, ok: "Delete", danger: true }
+            );
+            if (!sure) return;
             drop.disabled = true;
             const result = await ask("/minimax_h3_rewriter/library/delete", {
                 file: file.value,
                 id: record.id,
             });
             if (!result.payload.ok) {
-                problem.textContent = "that record could not be deleted";
+                said.say(result.payload.error || "That record could not be deleted.", true);
                 drop.disabled = false;
                 return;
             }
-            const pick = pickOf(node);
-            if (pick?.id === record.id) {
+            const cleared = pickOf(node)?.id === record.id;
+            if (cleared) {
                 setWidgetValue(node, PICK, "");
                 relabel(node);
             }
+            said.say(
+                `Deleted '${record.name || record.id}'.` +
+                    (cleared ? " This node's choice went with it." : "")
+            );
             load();
         });
         acts.append(take, change, hand, drop);
@@ -938,6 +889,7 @@ function openLibrary(node, button) {
     function lastPromptCard() {
         const summary = recordFor(node.id);
         const holder = element("div", "mmxlib-card");
+        holder.dataset.key = LAST_KEY;
         const body = element("div", "mmxlib-body");
         body.appendChild(element("div", "mmxlib-name", "Last Prompt"));
         body.appendChild(element("div", "mmxlib-meta", describeRun(summary)));
@@ -951,9 +903,13 @@ function openLibrary(node, button) {
         hand.disabled = !summary?.stored;
         hand.title = "Put this answer on the clipboard, without switching anything on";
         hand.addEventListener("click", async () => {
-            const { payload } = await ask(
+            const { ok, payload } = await ask(
                 `/minimax_h3_rewriter/memory/text?node=${encodeURIComponent(node.id)}`
             );
+            if (!ok) {
+                said.say(payload.error || "The answer could not be read.", true);
+                return;
+            }
             copy(payload.text || "", hand);
         });
         take.title =
@@ -981,20 +937,35 @@ function openLibrary(node, button) {
                 element(
                     "div",
                     "mmxlib-none",
-                    records.length
-                        ? "Nothing in this set matches."
-                        : "This set is empty. 'Save the last prompt' on a node puts one here."
+                    unread
+                        ? "This set could not be read."
+                        : records.length
+                          ? "Nothing in this set matches."
+                          : "This set is empty. 'Save the last prompt' on a node puts one here."
                 )
             );
         }
+        showing = shown.length;
+        said.paint();
+        walker.light(walker.lit() || firstLit(), opened ? "nearest" : "center");
+    }
+
+    function firstLit() {
+        const rows = walker.rows();
+        const pointed = pickOf(node)?.id;
+        const mine = pointed ? rows.find((one) => one.dataset.key === pointed) : null;
+        if (mine) return mine;
+        if (!search.value.trim() && !filters.size) return null;
+        return rows.find((one) => one.dataset.key !== LAST_KEY) || null;
     }
 
     async function load() {
-        const { payload } = await ask(
+        const { ok, status, payload } = await ask(
             `/minimax_h3_rewriter/library?file=${encodeURIComponent(file.value)}`
         );
+        unread = ok ? "" : payload.error || `HTTP ${status}`;
         records = payload.records || [];
-        problem.textContent = payload.problem || "";
+        said.stand(unread || payload.problem || "");
         chips.replaceChildren();
         for (const label of payload.groups || []) {
             const chip = element("span", "mmxlib-chip", label);
@@ -1003,15 +974,24 @@ function openLibrary(node, button) {
                 if (filters.has(label)) filters.delete(label);
                 else filters.add(label);
                 chip.classList.toggle("mmxlib-on", filters.has(label));
-                draw();
+                narrowed();
             });
             chips.appendChild(chip);
         }
         draw();
+        opened = true;
     }
 
-    search.addEventListener("input", draw);
+    function narrowed() {
+        said.say("");
+        walker.light(null);
+        draw();
+    }
+
+    search.addEventListener("input", narrowed);
     file.addEventListener("change", () => {
+        said.say("");
+        walker.light(null);
         filters.clear();
         load();
     });
@@ -1109,7 +1089,7 @@ function addNewFileButton(nodeType) {
             {
                 label: NEW_FILE_LABEL,
                 tooltip: NEW_FILE_TOOLTIP,
-                async onClick() {
+                async onClick(button) {
                     const wanted = await askName(
                         "New prompt file",
                         "A separate set of saved prompts, for the nodes wired to this " +
@@ -1117,19 +1097,23 @@ function addNewFileButton(nodeType) {
                         "storyboards"
                     );
                     if (!wanted) return;
-                    const { payload } = await ask("/minimax_h3_rewriter/library/create", {
-                        file: wanted,
-                    });
-                    if (!payload.ok) return;
+                    const { ok, status, payload } = await ask(
+                        "/minimax_h3_rewriter/library/create",
+                        { file: wanted }
+                    );
+                    if (!ok || !payload.ok) {
+                        await warned(payload.error || `HTTP ${status}`, {
+                            title: "The prompt file was not made",
+                        });
+                        return;
+                    }
                     const combo = widgetNamed(node, FILE_WIDGET);
                     if (combo) {
                         combo.options = combo.options || {};
                         combo.options.values = payload.files || [payload.file];
                         setWidgetValue(node, FILE_WIDGET, payload.file);
                     }
-                    console.log(
-                        `[MiniMax-H3 Prompt Rewriter] prompt set '${payload.file}' created`
-                    );
+                    told(button, `Created '${payload.file}'`);
                 },
             },
         ]);
