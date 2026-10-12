@@ -6,6 +6,24 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.28.1 - 2026-10-12
+
+### Fixed
+
+- **Qwen2.5-Omni runs on Transformers 4.57.** The Omni rewriter on a folder of
+  safetensors stopped at `Unrecognized configuration class Qwen2_5OmniConfig for
+  this kind of AutoModel: AutoModelForImageTextToText`. The checkpoint is a
+  wrapper, and only the thinker inside it writes text; the pack found the
+  thinker's class through the image-text-to-text auto mapping, which lists it
+  from Transformers 5 on and not before. 4.57 ships the class all the same,
+  beside the wrapper, and when no mapping names it the pack now finds it there
+  by the config it is built from. Past that, a reference picture met the next
+  4.57 difference: its Omni processor reads the system turn as a list of parts
+  and failed on a plain string with `string indices must be integers`. The
+  processor now gets every turn as parts, which the chat templates of all three
+  bases render exactly as they rendered the string. The requirement stays at
+  4.57.1. Issue #20.
+
 ## 0.28.0 - 2026-10-10
 
 ### Added

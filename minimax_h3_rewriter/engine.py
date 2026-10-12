@@ -9,6 +9,7 @@ its VRAM after generating unless the caller opts to keep it resident.
 from __future__ import annotations
 
 import gc
+import importlib
 import json
 import logging
 import os
@@ -117,9 +118,10 @@ def _inner_class(config: dict):
     the outer type gets "unrecognized configuration class" and no model at all.
 
     Nothing about that class is hard-coded here: Transformers' own mapping is
-    what names it, and the only knowledge added is which way is down. Returns
-    ``None`` whenever the outer config is loadable as it stands, which is every
-    checkpoint but this family.
+    what names it -- or, on a release whose mapping leaves it out, the class
+    itself does (``_generating_class``) -- and the only knowledge added is which
+    way is down. Returns ``None`` whenever the outer config is loadable as it
+    stands, which is every checkpoint but this family.
     """
     try:
         import transformers
@@ -131,16 +133,57 @@ def _inner_class(config: dict):
 
     from .discovery import configs
 
-    if not config or config.get("model_type") in mapping:
+    outer = config.get("model_type") if config else None
+    if not config or outer in mapping:
         return None
     for nested in list(configs(config))[1:]:
-        named = mapping.get(nested.get("model_type"))
+        inner = nested.get("model_type")
+        named = mapping.get(inner)
         candidate = getattr(transformers, named, None) if named else None
+        if candidate is None:
+            candidate = _generating_class(outer, inner)
         if candidate is not None:
             log.info(
                 "[minimax_h3_rewriter._model_class] %s wraps %s, loading it as %s",
-                config.get("model_type"), nested.get("model_type"), named,
+                outer, inner, candidate.__name__,
             )
+            return candidate
+    return None
+
+
+def _generating_class(outer: str, inner: str):
+    """The class in ``outer``'s own modeling module that generates from ``inner``.
+
+    Transformers 4.57 lists Qwen2.5-Omni's thinker under no auto class at all --
+    5.x files it under image-text-to-text -- yet ships the class itself, in the
+    ``qwen2_5_omni`` module next to the wrapper (issue #20). It is found there by
+    what it declares, not by its name: built from the inner config, able to
+    generate. Only classes defined in that module count, so a text tower imported
+    from elsewhere never answers for the thinker. ``None`` when ``outer`` is not
+    one of Transformers' own models, which is the case for remote code.
+    """
+    try:
+        from transformers import GenerationMixin, PreTrainedModel
+        from transformers.models.auto.configuration_auto import (
+            CONFIG_MAPPING_NAMES,
+            model_type_to_module_name,
+        )
+
+        if not inner or outer not in CONFIG_MAPPING_NAMES:
+            return None
+        name = model_type_to_module_name(outer)
+        module = importlib.import_module(f"transformers.models.{name}.modeling_{name}")
+    except ImportError:
+        return None
+
+    for candidate in vars(module).values():
+        if (
+            isinstance(candidate, type)
+            and candidate.__module__ == module.__name__
+            and issubclass(candidate, PreTrainedModel)
+            and issubclass(candidate, GenerationMixin)
+            and getattr(candidate.config_class, "model_type", None) == inner
+        ):
             return candidate
     return None
 
@@ -432,6 +475,22 @@ def _render_prompt(tokenizer, messages: list[dict[str, str]]) -> str:
     return _apply_template(tokenizer, messages)
 
 
+def _as_parts(messages: list[dict]) -> list[dict]:
+    """The messages with every plain-string content turned into one text part.
+
+    Typed parts are the shape processors are written for; a bare string only
+    happens to work in most of them. Transformers 4.57's Omni processor reads
+    ``content[0]["text"]`` off the system turn before rendering anything, and a
+    string there is a TypeError (issue #20). The templates of all three bases
+    render one text part exactly as they render the string.
+    """
+    return [
+        {**message, "content": [{"type": "text", "text": message["content"]}]}
+        if isinstance(message.get("content"), str) else message
+        for message in messages
+    ]
+
+
 def _interrupt_criteria():
     from transformers import StoppingCriteria
 
@@ -703,7 +762,7 @@ def generate_with_images(
 
     set_seed(normalize_seed(seed))
     try:
-        rendered = _apply_template(processor, messages)
+        rendered = _apply_template(processor, _as_parts(messages))
     except ValueError:
         rendered = _apply_template(processor.tokenizer, messages)
     inputs = processor(text=[rendered], images=list(images), return_tensors="pt")
