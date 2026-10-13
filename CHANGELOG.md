@@ -6,6 +6,38 @@ The version in `pyproject.toml`, the git tag and the release on GitHub always sa
 the same thing; the release workflow refuses a tag that disagrees with
 `pyproject.toml`, or one that neither changelog has a section for.
 
+## 0.29.0 - 2026-10-13
+
+### Added
+
+- **Unload model.** A button on every node that has `keep_model_loaded`. It
+  unloads what the pack is keeping in memory, at once and without a run. Until
+  now the only way to let a kept model go was to turn the switch off, and the
+  switch is an input: the node ran again and wrote the same text a second time
+  before it unloaded. Pressed while a node is still writing, the button waits
+  for that run and unloads after it. Suggested in issue #20.
+- **ComfyUI's `Unload Models` unloads this pack's models too.** They are not
+  ComfyUI models, so its model management walked past them. The pack now hooks
+  itself into `comfy.model_management.unload_all_models`, which also covers the
+  `/free` route, ComfyUI's out-of-memory handler and the clean-up nodes of other
+  packs: one of those between the writer and the sampler takes the writer out
+  before the video model loads.
+
+### Changed
+
+- **`repeat_last` reads `keep_model_loaded`.** A node handing back a kept
+  prompt, its own or one from the library, never reached the engine that
+  honours the switch, so the model stayed whatever the switch said. With the
+  switch off, such a run now unloads what the pack holds and says so in the
+  caption under the node. `repeat_last` on and `keep_model_loaded` off gives the
+  card back with nothing written twice.
+- **A kept model no longer outlives a request to unload everything.** This
+  follows from the hook, and it matters in two cases. A sampler that clears the
+  card for itself by calling ComfyUI's unload takes a kept writer with it, where
+  before the two competed for VRAM. And under `--disable-smart-memory` ComfyUI
+  unloads all models after every workflow run, so `keep_model_loaded` holds
+  within a run and not across runs.
+
 ## 0.28.1 - 2026-10-12
 
 ### Fixed

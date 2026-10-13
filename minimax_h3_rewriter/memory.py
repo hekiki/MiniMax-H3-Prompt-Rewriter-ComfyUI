@@ -18,6 +18,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 
+from . import resident
 from .fields import body_field, split_fields
 
 log = logging.getLogger(__name__)
@@ -36,7 +37,10 @@ REPEAT_TOOLTIP = (
     "prompt, this switch is what makes it happen.\n\n"
     "Off is always a real run. The session store is in memory only, one answer per node: "
     "it is not saved with the workflow and does not survive a restart, while a saved "
-    "prompt does both. 'bypass' still wins over all of it."
+    "prompt does both. 'bypass' still wins over all of it.\n\n"
+    "A kept prompt handed back with 'keep_model_loaded' off also unloads the model the "
+    "pack is holding. That is how to give the card back once the text is right: switch "
+    "this on and that off, and nothing is written twice."
 )
 
 REPEAT_CAPTION_TOOLTIP = (
@@ -245,6 +249,10 @@ def repeat(node_id, node_class: str, enabled: bool, given: dict, label: str = "p
     """Return the kept answer when the switch asks for it, or None to run.
 
     The caller runs the model when this is None and calls ``keep`` afterwards.
+
+    When it is not None no run follows, so nothing downstream will read
+    'keep_model_loaded' -- it is settled here, from ``given``. A captioner has
+    no such input and nothing changes for it.
     """
     if not enabled:
         return None
@@ -274,8 +282,11 @@ def repeat(node_id, node_class: str, enabled: bool, given: dict, label: str = "p
         "[minimax_h3_rewriter.memory] %s #%s: repeating the %s kept at %s, %d characters%s",
         node_class, node_id, label, record.clock, len(record.text), note,
     )
+    freed = resident.freed(resident.settle(given.get("keep_model_loaded")))
     progress.text(
-        f"repeat_last: the {label} kept at {record.clock}{note}\n\n{record.text[-2000:]}",
+        f"repeat_last: the {label} kept at {record.clock}{note}"
+        + (f"\n{freed}" if freed else "")
+        + f"\n\n{record.text[-2000:]}",
         force=True,
     )
     announce(node_id, summary(record, repeated=True, changed=changed))

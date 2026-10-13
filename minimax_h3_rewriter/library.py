@@ -16,7 +16,7 @@ import os
 import time
 import uuid
 
-from . import checks, guide_prompt
+from . import checks, guide_prompt, resident
 from .constants import OUTPUT_FIELDS
 from .fields import split_fields
 
@@ -340,6 +340,7 @@ def picked(
     count: int,
     node_id=None,
     having=None,
+    keep_loaded=None,
 ):
     """What the library window has pointed this node at.
 
@@ -359,6 +360,10 @@ def picked(
     those references by name inside the text, so handing it a different set is a
     real hazard rather than a tidiness one. It is said, not refused -- reusing a
     description as a template is a legitimate thing to do.
+
+    ``keep_loaded`` is the node's 'keep_model_loaded'. A saved prompt handed on
+    means no run follows to read that switch, so it is settled here, the same
+    as for the node's own kept answer in ``memory.repeat``.
     """
     if not enabled:
         return None, None
@@ -408,12 +413,15 @@ def picked(
                 from .progress import announce
 
                 announce(node_id, [("warn", mismatch)])
+    freed = resident.freed(resident.settle(keep_loaded))
     if node_id is not None:
         from .progress import NodeProgress
 
         NodeProgress(node_id).text(
             (note + chr(10) + chr(10) if note else "")
-            + f"library: '{label}' from {name}\n\n{(record.get('text') or '')[-2000:]}",
+            + f"library: '{label}' from {name}"
+            + (chr(10) + freed if freed else "")
+            + f"\n\n{(record.get('text') or '')[-2000:]}",
             force=True,
         )
 

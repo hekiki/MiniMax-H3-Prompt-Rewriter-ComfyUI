@@ -1384,6 +1384,7 @@ class MiniMaxH3PromptRewriter:
         chosen, saved = library.picked(
             library_pick, repeat_last, "MiniMaxH3PromptRewriter",
             1 + len(OUTPUT_FIELDS), unique_id, having=(),
+            keep_loaded=keep_model_loaded,
         )
         if chosen is not None:
             return chosen
@@ -1861,6 +1862,7 @@ class MiniMaxH3GuidedWriter:
         chosen, saved = library.picked(
             library_pick, repeat_last, "MiniMaxH3GuidedWriter",
             1 + len(OUTPUT_FIELDS), unique_id, having=(),
+            keep_loaded=keep_model_loaded,
         )
         if chosen is not None:
             return chosen
@@ -2041,6 +2043,7 @@ class MiniMaxH3GuidedWriterRef:
         chosen, saved = library.picked(
             library_pick, repeat_last, "MiniMaxH3GuidedWriterRef",
             1 + len(REF_OUTPUT_FIELDS), unique_id, having=(),
+            keep_loaded=keep_model_loaded,
         )
         if chosen is not None:
             return chosen

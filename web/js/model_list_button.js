@@ -56,6 +56,21 @@ const GUIDE_FOLDER = {
         "to fit a small model's context.",
 };
 
+const KEEP_WIDGET = "keep_model_loaded";
+const UNLOAD = {
+    url: "/minimax_h3_rewriter/unload",
+    label: "Unload model",
+    tooltip:
+        "Unloads the model this pack is keeping in memory, without running the node " +
+        "again. It is what to press when 'keep_model_loaded' is on, the text is right " +
+        "and the card is wanted for something else: turning that switch off instead " +
+        "would write the same text a second time first.\n\n" +
+        "Pressed while a node is still writing, it waits for that run and unloads " +
+        "after it. ComfyUI's own 'Unload Models' does the same thing to this pack's " +
+        "model. Nothing happens for a GGUF run by the llama.cpp binaries, which " +
+        "never keep a model.",
+};
+
 const STYLE_ID = "minimax-h3-modellist-style";
 const STYLE = `
 .mmxlib-back .mmxlib-panel.mmxmod-panel { width: min(920px, 88vw); }
@@ -773,10 +788,29 @@ function openModelList(node) {
     load();
 }
 
+async function unloadModel(button) {
+    button.disabled = true;
+    const { status, payload } = await ask(UNLOAD.url, {});
+    button.disabled = false;
+    if (!payload.ok) {
+        await warned(payload.error || `HTTP ${status}`, {
+            title: "Could not unload the model",
+        });
+        return;
+    }
+    const gone = payload.released || [];
+    if (gone.length) console.log(`[MiniMax-H3 Prompt Rewriter] unloaded ${gone.join(", ")}`);
+    if (payload.waiting) told(button, "After this run");
+    else told(button, gone.length ? "Unloaded" : "Nothing loaded");
+}
+
 function addButtons(nodeType, nodeData) {
     const owns = Boolean(NODE_SECTIONS[nodeData.name]);
     const guided = GUIDE_NODES.includes(nodeData.name);
-    if (!owns && !guided) return;
+    const keeps = Boolean(
+        nodeData.input?.required?.[KEEP_WIDGET] ?? nodeData.input?.optional?.[KEEP_WIDGET]
+    );
+    if (!owns && !guided && !keeps) return;
 
     const onNodeCreated = nodeType.prototype.onNodeCreated;
     nodeType.prototype.onNodeCreated = function () {
@@ -797,6 +831,13 @@ function addButtons(nodeType, nodeData) {
                 onClick: async (button) => {
                     if (await reveal(GUIDE_FOLDER)) told(button, "Opened");
                 },
+            });
+        }
+        if (keeps) {
+            wanted.push({
+                label: UNLOAD.label,
+                tooltip: UNLOAD.tooltip,
+                onClick: unloadModel,
             });
         }
         buttonRow(this, "mmx_open", wanted);

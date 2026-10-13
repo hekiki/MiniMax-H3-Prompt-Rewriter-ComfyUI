@@ -19,7 +19,7 @@ for [MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) comes out — enti
   <a href="https://www.youtube.com/watch?v=PZd9fWX15VA"><img alt="Video review, in Russian" src="https://img.shields.io/badge/YouTube-review%20(RU)-FF0000?logo=youtube&logoColor=white"></a>
 </p>
 
-![The rewriter node in ComfyUI: a short prompt on the left, the structured shot-by-shot description, soundscape and music fields on the right](docs/node_preview.png)
+![The rewriter node in ComfyUI between its options node and a text viewer: a short prompt in the node, and on the right the structured shot-by-shot description, soundscape and music fields](docs/node_preview.png)
 
 The prompt may be in any language the base model reads; the rewrite comes back in
 English, which is what MiniMax-H3 expects.
@@ -100,6 +100,7 @@ If your card has 8 GB, skip to [the writer nodes](#minimax-h3-prompt-writer-t2va
   - [MiniMax-H3 Prompt Presets](#minimax-h3-prompt-presets)
   - [The duration widget](#the-duration-widget)
   - [Repeating the last answer](#repeating-the-last-answer)
+  - [Unloading a kept model](#unloading-a-kept-model)
   - [The answer is checked](#the-answer-is-checked)
   - [Acting on what it found](#acting-on-what-it-found)
   - [The prompt library](#the-prompt-library)
@@ -253,7 +254,9 @@ releases the VRAM again.
 - `seed`
 - `keep_model_loaded` — **off by default.** The 27B model is released as soon as
   the rewrite finishes, so the same GPU can run H3 video generation next. Turn it
-  on only when iterating on prompts back-to-back.
+  on only when iterating on prompts back-to-back, and see
+  [Unloading a kept model](#unloading-a-kept-model) for giving the card back
+  afterwards.
 - `options` — optional; connect a **MiniMax-H3 Rewriter Options** node.
 
 ### MiniMax-H3 Prompt Rewriter 8B (sees frames)
@@ -265,7 +268,7 @@ where the 27B has to be *told* what a reference frame contains, this one is show
 the frame and writes the alignment line from what it sees. It covers four tasks
 rather than one, and fits on a card the 27B cannot go near.
 
-![The 8B rewriter node in ComfyUI, set to T2VA: the options node on the left, the rewriter with its first_frame and last_frame inputs in the middle, and the finished rewrite on the right with numbered shots, (S1) and (S2) speaker ids and a <d>[English] Hello.</d> dialogue tag](docs/node_rewriter_8b.png)
+![The 8B rewriter node in ComfyUI, set to T2VA: the options node on the left, the rewriter with its first_frame and last_frame inputs in the middle, and the finished rewrite on the right with numbered shots, an (S1) speaker id and a <d>[English] Hello.</d> dialogue tag](docs/node_rewriter_8b.png)
 
 **Outputs** are the same four as the rewriter above, so the two are
 interchangeable downstream.
@@ -343,7 +346,7 @@ itself: the picture, the clip, or the sound. It is also the only one of the thre
 that covers **Ref2AV**, the full-reference task, which answers with six fields
 instead of three.
 
-![The Omni rewriter node set to REF2AV: four reference sockets down the left with a checkbox on each row, eight outputs on the right from rewritten_prompt down to non_diegetic_music, and between them a strip of three coloured squares - a blue "pic 1" over ref_0, a blue "pic 2" over ref_1 and a purple "aud 1" over ref_2 - above the line "drag to reorder - that order numbers the labels - click a square to switch it off". Below that the five tasks with REF2AV lit, six aspect-ratio rectangles drawn to proportion with 16:9 chosen, a duration of 10.0, a Russian prompt, and an on-disk Qwen2.5-Omni-7B Q8_0 with its projector. On the right the finished rewrite fills all six Ref2AV fields, naming Subject 1, Subject 2, Picture 1, Picture 2 and Audio 1 across two shots](docs/node_rewriter_omni.png)
+![The Omni rewriter node set to REF2AV, fed by a Load Video and a Load Image node: four reference sockets down the left with a checkbox on each row, nine outputs on the right from rewritten_prompt down to references, and between them a strip of three coloured squares - a blue "pic 1" over ref_0, a purple "aud 1" over ref_1 and a blue "pic 2" over ref_2 - above the line "drag to reorder - that order numbers the labels - click a square to switch it off". Below that the five tasks with REF2AV lit, eight aspect-ratio rectangles drawn to proportion from 48:9 to 9:16 with 16:9 chosen, a duration of 10.0, a two-sentence prompt, a Qwen2.5-Omni-7B GGUF Q8_0 in the model dropdown, and five buttons at the bottom: Model list, Unload model, Save the last prompt, Edit the last prompt and Prompt library. On the right the finished rewrite fills all six Ref2AV fields, naming Subject 1, Subject 2, Picture 1, Picture 2 and Audio 1 across two shots](docs/node_rewriter_omni.png)
 
 **Outputs.** Seven, and which of them fill depends on the task. The four frame
 tasks return the same three as the other two rewriters, so they are
@@ -484,7 +487,7 @@ same prompt, the aspect ratio is the same aspect ratio, the duration is the same
 duration — so trying another adapter meant retyping all of it into a second node
 and then keeping them in step.
 
-![The Universal Rewriter on its Omni tab, running Ref2VA: four reference rows down the left — first_frame, last_frame, reference_video and reference_audio, each connected and switched on — and eight outputs on the right, the three every task fills first and the four Ref2VA adds after them. Three tabs across the top with "Omni LoRA / sees, hears" lit, a task strip with Ref2VA lit, eight aspect-ratio rectangles drawn to proportion from 48:9 to 9:16 with 16:9 chosen, a duration slider at 10, the prompt "A blue whale breaching at sunset, filmed from a drone", and below them model_omni pointing at an on-disk Qwen2.5-Omni-7B Q8_0 with quantization_omni set to bfloat16, then aspect_ratio, repeat_last and three buttons: Open model list, Save the last prompt and Prompt library. On the right the six-field answer, every reference marked fully_preserved in the retention analysis](docs/node_universal_rewriter.png)
+![The Universal Rewriter on its Omni tab, running I2VA: four reference rows down the left — first_frame, last_frame, reference_video and reference_audio, each with a checkbox, and first_frame fed by a Load Image node — and nine outputs on the right, from rewritten_prompt down to references. Three tabs across the top with "Omni LoRA / sees, hears" lit, a task strip with I2VA lit, eight aspect-ratio rectangles drawn to proportion from 48:9 to 9:16 with 16:9 chosen, a duration slider at 10, the prompt "A woman says hello to a alien.", and below them model_omni on a Qwen2.5-Omni-7B GGUF Q8_0 with quantization_omni set to bfloat16, then aspect_ratio, repeat_last and five buttons: Model list, Unload model, Save the last prompt, Edit the last prompt and Prompt library. On the right the answer: a line saying Picture 1 is fully referenced from the first shot, then the three fields I2VA fills](docs/node_universal_rewriter.png)
 
 *One node, three tabs. Nothing above the model rows belongs to a tab — the
 task, the ratio, the duration and the prompt are one set of values, whichever
@@ -770,7 +773,7 @@ goes into the system prompt and any instruction-following GGUF writes to it. A
 5.2 GB Qwen3.5-9B fills all three fields, with correct camera vocabulary, speaker
 IDs and `<d>[English] …</d>` dialogue, in about 20 seconds.
 
-![The T2VA writer node beside a text viewer: a four-line prompt on the left, and on the right the shot-by-shot description with its two numbered shots, the soundscape paragraph, and non_diegetic_music reading N/A](docs/node_t2va.png)
+![The T2VA writer node between its options node and a text viewer: a one-line prompt, a model served by Ollama, and on the right the shot-by-shot description with its three numbered shots, the soundscape paragraph, and non_diegetic_music describing a sparse piano and a low cello](docs/node_t2va.png)
 
 *T2VA, 10 seconds at 16:9, on a local Qwen3.6-27B — 11.2 s. The prompt went in
 in Russian and the description came back in H3's English format, with the cut at
@@ -889,7 +892,7 @@ now the only thing deciding which was which was the order the caption node
 happened to write them in, which came in turn from which slot each was plugged
 into. Real, load-bearing, and nowhere on screen.
 
-![The Universal Writer node: five reference rows each with a checkbox, four of them connected, then a strip of four coloured squares reading subj 1 over ref_0, pic 1 over ref_1, vid 1 over ref_2 and aud 1 over ref_3, each with an "+ instr" button and a line of help under them, a task switch with Ref2VA lit, eight aspect-ratio rectangles drawn to proportion from 48:9 to 9:16 with 16:9 chosen, a duration slider at 10, the prompt, the captioner and writer dropdowns, and four buttons at the bottom: Open model list, Open guide folder, Save the last prompt and Prompt library. On the right the six-field answer, written around <Subject 1>, <Picture 1>, <Video 1> and <Audio 1>](docs/node_universal_writer.png)
+![The Universal Writer node, with a Load Video and a Load Image node feeding it: four reference rows each with a checkbox, three of them connected, then a strip of three coloured squares reading vid 1 over ref_0, aud 1 over ref_1 and pic 1 over ref_2, each with an "+ instr" button and a line of help under them, a task switch with Ref2VA lit, eight aspect-ratio rectangles drawn to proportion from 48:9 to 9:16 with 16:9 chosen, a duration slider at 15.1, the prompt, the captioner and writer dropdowns, and six buttons at the bottom: Model list, Open guide folder, Unload model, Save the last prompt, Edit the last prompt and Prompt library. On the right the six-field answer, written around <Subject 1>, <Picture 1>, <Video 1> and <Audio 1>](docs/node_universal_writer.png)
 
 *Four references on one growing socket — an image used as a subject, an image
 used as a frame, a clip and a sound — and on the right an answer written around
@@ -2085,6 +2088,41 @@ The node's own last answer is what the switch hands back by default, and
 [the prompt library](#the-prompt-library) is how you point it at something else
 instead. One switch either way: `repeat_last` decides whether a kept prompt is
 handed on at all, the library window decides which one.
+
+### Unloading a kept model
+
+`keep_model_loaded` leaves the writer in memory after a run. That is what you
+want while iterating on a prompt, and what is in the way once the text is right
+and the card is wanted for video. Turning the switch off does not give the card
+back cheaply: the switch is an input, a changed input is a new run, and the node
+writes the same text a second time before it unloads. Three things let the model
+go without running it again.
+
+**`Unload model`** is a button on every node that has the switch. It unloads
+whatever the pack is holding, at once. Pressed while a node is still writing, it
+waits for that run and unloads after it — whatever `keep_model_loaded` says,
+because the press came later.
+
+**ComfyUI's own `Unload Models`** reaches the pack's models too. They are not
+ComfyUI models and its model management does not know them, so the pack hooks
+itself into the unload. The same goes for everything else that asks ComfyUI to
+unload all models: the `/free` route, the out-of-memory handler, and the
+clean-up nodes of other packs — put one between the writer and the sampler, and
+the writer is gone before the video model loads. It cuts the other way as well.
+A sampler that clears the card for itself, as several wrappers do, takes a kept
+writer along with the rest; and under `--disable-smart-memory` ComfyUI unloads
+everything after every workflow run, so a kept model lasts for that run and no
+longer.
+
+**`repeat_last` on with `keep_model_loaded` off** unloads as well. A node that
+hands back a kept prompt does not run the model, but it still reads the switch:
+the text comes back from the node's own store, the model is unloaded, and
+nothing is written twice.
+
+All three let go of everything the pack holds inside the ComfyUI process — a
+Transformers checkpoint or a GGUF on `llama-cpp-python` — and not only the model
+of the node the button was pressed on. A GGUF run by the llama.cpp binaries was
+never kept: the model leaves with the process.
 
 ### The answer is checked
 

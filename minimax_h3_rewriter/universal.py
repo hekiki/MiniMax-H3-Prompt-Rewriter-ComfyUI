@@ -578,6 +578,7 @@ class MiniMaxH3UniversalWriter(io.ComfyNode):
         chosen, saved = library.picked(
             library_pick, repeat_last, "MiniMaxH3UniversalWriter", 1 + len(ALL_FIELDS) + 2,
             cls.hidden.unique_id, having=[item.kind for item in assets],
+            keep_loaded=keep_model_loaded,
         )
         if chosen is not None:
             return io.NodeOutput(*chosen, handed_on)

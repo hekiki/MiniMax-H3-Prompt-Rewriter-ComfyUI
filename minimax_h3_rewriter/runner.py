@@ -186,8 +186,12 @@ def free_comfy_vram(device: str = "auto") -> None:
     Making room is right when both models want the same card and actively
     harmful when they do not: on a second GPU, unloading the diffusion model
     costs a full reload after the rewrite and buys nothing.
+
+    ``unload_all_models`` is hooked to release this pack's own models as well
+    (see ``resident.install``), and this is the one caller that must not: it
+    is clearing the card for a model of ours.
     """
-    from . import devices
+    from . import devices, resident
 
     if not devices.shares_comfy_device(device):
         log.info(
@@ -198,7 +202,8 @@ def free_comfy_vram(device: str = "auto") -> None:
     try:
         import comfy.model_management as mm
 
-        mm.unload_all_models()
+        with resident.making_room():
+            mm.unload_all_models()
         mm.soft_empty_cache(force=True)
     except Exception:
         log.debug("[minimax_h3_rewriter.runner.free_comfy_vram] skipped", exc_info=True)

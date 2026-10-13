@@ -871,6 +871,7 @@ class MiniMaxH3PromptWriterOmni(io.ComfyNode):
         chosen, saved = library.picked(
             library_pick, repeat_last, "MiniMaxH3PromptWriterOmni", 1 + len(ALL_FIELDS),
             cls.hidden.unique_id, having=[item.kind for item in connected],
+            keep_loaded=keep_model_loaded,
         )
         if chosen is not None:
             return io.NodeOutput(*chosen, handed_on)

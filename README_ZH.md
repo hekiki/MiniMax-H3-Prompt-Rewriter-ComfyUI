@@ -24,7 +24,7 @@ ComfyUI 节点。输入一句简短的提示词，输出一段结构化、可直
   <a href="https://www.youtube.com/watch?v=PZd9fWX15VA"><img alt="Video review, in Russian" src="https://img.shields.io/badge/YouTube-review%20(RU)-FF0000?logo=youtube&logoColor=white"></a>
 </p>
 
-![ComfyUI 中的重写器节点：左边是一句简短的提示词，右边是结构化的分镜描述、声景和音乐字段](docs/node_preview.png)
+![ComfyUI 中的重写器节点，夹在选项节点和文本查看器之间：节点里是一句简短的提示词，右边是结构化的分镜描述、声景和音乐字段](docs/node_preview.png)
 
 提示词可以用底座模型读得懂的任何语言写；重写的结果一律返回英文 —— MiniMax-H3
 要的正是英文。
@@ -104,6 +104,7 @@ ComfyUI 节点。输入一句简短的提示词，输出一段结构化、可直
   - [MiniMax-H3 Prompt Presets 提示词预设](#minimax-h3-prompt-presets-提示词预设)
   - [时长小部件](#时长小部件)
   - [重复上一次的答案](#重复上一次的答案)
+  - [卸载留在内存里的模型](#卸载留在内存里的模型)
   - [答案会被检查一遍](#答案会被检查一遍)
   - [照着发现的问题动手](#照着发现的问题动手)
   - [提示词库](#提示词库)
@@ -240,7 +241,8 @@ python_embeded\python.exe -m pip install -r ComfyUI\custom_nodes\MiniMax-H3-Prom
 - `greedy` —— 默认开启，输出是确定性的。想采样就把它关掉。
 - `seed`
 - `keep_model_loaded` —— **默认关闭。** 重写一结束，27B 模型就被释放，好让同一块 GPU
-  接着去跑 H3 视频生成。只有在连着不停地打磨提示词时才打开它。
+  接着去跑 H3 视频生成。只有在连着不停地打磨提示词时才打开它；之后怎么把显卡要回来，
+  见[卸载留在内存里的模型](#卸载留在内存里的模型)。
 - `options` —— 可选；接一个 **MiniMax-H3 Rewriter Options** 节点。
 
 ### MiniMax-H3 Prompt Rewriter 8B 看得见画面
@@ -251,7 +253,7 @@ python_embeded\python.exe -m pip install -r ComfyUI\custom_nodes\MiniMax-H3-Prom
 对齐行（开头那句告诉 H3 参考帧落在什么位置的固定语句）。它覆盖四个任务而不是一个，
 而且装得进 27B 根本靠近不了的显卡。
 
-![ComfyUI 中的 8B 重写器节点，任务设为 T2VA：左边是选项节点，中间是带 first_frame 和 last_frame 输入的重写器，右边是写好的结果，里面有编号的镜头、(S1) 和 (S2) 说话人标识，以及一条 <d>[English] Hello.</d> 对白标签](docs/node_rewriter_8b.png)
+![ComfyUI 中的 8B 重写器节点，任务设为 T2VA：左边是选项节点，中间是带 first_frame 和 last_frame 输入的重写器，右边是写好的结果，里面有编号的镜头、(S1) 说话人标识，以及一条 <d>[English] Hello.</d> 对白标签](docs/node_rewriter_8b.png)
 
 **输出**和上面那个重写器完全一样的四个，所以两者在下游可以互换。
 
@@ -316,7 +318,7 @@ LightX2V 的第三个适配器，也是第一个会听的。它训练在
 片段，或者声音。它也是三个里面唯一覆盖 **Ref2AV** 这个全参考任务的，而这个任务回答
 的是六个字段而不是三个。
 
-![设为 REF2AV 的 Omni 重写器节点：左边一列四个参考插槽，每一行都带一个复选框；右边八个输出，从 rewritten_prompt 一直到 non_diegetic_music；中间横着一条三个彩色方块的素材条 —— ref_0 上面是蓝色的 “pic 1”，ref_1 上面是蓝色的 “pic 2”，ref_2 上面是紫色的 “aud 1” —— 方块下面写着 “拖动可重新排序 —— 顺序决定标签的编号 —— 点击方块可以把它关掉”。再往下是五个任务，REF2AV 亮着；六个按真实比例画出来的画面比例方框，选中的是 16:9；时长 10.0；一句俄语提示词；以及一个硬盘上的 Qwen2.5-Omni-7B Q8_0 连同它的投影器。右边写好的结果把 Ref2AV 的六个字段全都填满了，在两个镜头里点名了 Subject 1、Subject 2、Picture 1、Picture 2 和 Audio 1](docs/node_rewriter_omni.png)
+![设为 REF2AV 的 Omni 重写器节点，左边接着一个 Load Video 节点和一个 Load Image 节点：左边一列四个参考插槽，每一行都带一个复选框；右边九个输出，从 rewritten_prompt 一直到 references；中间横着一条三个彩色方块的素材条 —— ref_0 上面是蓝色的 “pic 1”，ref_1 上面是紫色的 “aud 1”，ref_2 上面是蓝色的 “pic 2” —— 方块下面写着 “拖动可重新排序 —— 顺序决定标签的编号 —— 点击方块可以把它关掉”。再往下是五个任务，REF2AV 亮着；八个按真实比例画出来的画面比例方框，从 48:9 到 9:16，选中的是 16:9；时长 10.0；一段两句话的提示词；模型下拉框里是一个 Qwen2.5-Omni-7B GGUF Q8_0；底部五个按钮：Model list、Unload model、Save the last prompt、Edit the last prompt 和 Prompt library。右边写好的结果把 Ref2AV 的六个字段全都填满了，在两个镜头里点名了 Subject 1、Subject 2、Picture 1、Picture 2 和 Audio 1](docs/node_rewriter_omni.png)
 
 **输出。** 一共七个，哪些会被填满取决于任务。四个带画面的任务返回的是和另外两个
 重写器一样的那三个字段，所以下游可以互换。`Ref2AV` 返回六个：`subject_definitions`、
@@ -345,7 +347,7 @@ LightX2V 的第三个适配器，也是第一个会听的。它训练在
   `(wrong size for the adapter)`；而 **Qwen2.5-VL-7B** —— 它的架构字符串一样、同样是
   28 个块、宽度也一样，所以适配器*确实*挂得上去 —— 会标成
   `(vision only, not an Omni build)`，因为它的投影器里没有音频编码器，写出来的重写
-  会去描述一段从来没被听见过的声音。**Open model list** 按钮编辑的是 `models_omni`
+  会去描述一段从来没被听见过的声音。**Model list** 按钮编辑的是 `models_omni`
   这一节 —— 见后文。
 - `quantization` —— 怎么加载一个 **safetensors** 底座：`nf4` 约 9 GB 显存，`int8`
   约 12 GB，`bfloat16` 约 20 GB。对 GGUF 无效。**挑你的显卡装得下的最大那个** ——
@@ -437,7 +439,7 @@ token 的实测结果：
 那个画面比例，时长还是那个时长 —— 于是“换个适配器试试”就意味着把这一切重新敲进
 第二个节点，然后还得让两边一直保持同步。
 
-![处在 Omni 标签页、正在跑 Ref2VA 的通用重写器：左边一列四行参考素材 —— first_frame、last_frame、reference_video 和 reference_audio，每一行都接好并且打开着 —— 右边八个输出，先是每个任务都会填的那三个，后面跟着 Ref2VA 追加的四个。顶上横排三个标签页，亮着的是 “Omni LoRA / sees, hears”；任务条上 Ref2VA 亮着；八个按真实比例画出的画面比例方框，从 48:9 到 9:16，选中的是 16:9；时长滑块停在 10；提示词是 “A blue whale breaching at sunset, filmed from a drone”；下面 model_omni 指向硬盘上的一个 Qwen2.5-Omni-7B Q8_0，quantization_omni 设为 bfloat16；再往下是 aspect_ratio、repeat_last 和三个按钮：Open model list、Save the last prompt 和 Prompt library。右边是六个字段的答案，在保留度分析里每一份参考素材都标着 fully_preserved](docs/node_universal_rewriter.png)
+![处在 Omni 标签页、正在跑 I2VA 的通用重写器：左边一列四行参考素材 —— first_frame、last_frame、reference_video 和 reference_audio，每一行都带一个复选框，first_frame 上接着一个 Load Image 节点 —— 右边九个输出，从 rewritten_prompt 一直到 references。顶上横排三个标签页，亮着的是 “Omni LoRA / sees, hears”；任务条上 I2VA 亮着；八个按真实比例画出的画面比例方框，从 48:9 到 9:16，选中的是 16:9；时长滑块停在 10；提示词是 “A woman says hello to a alien.”；下面 model_omni 选的是一个 Qwen2.5-Omni-7B GGUF Q8_0，quantization_omni 设为 bfloat16；再往下是 aspect_ratio、repeat_last 和五个按钮：Model list、Unload model、Save the last prompt、Edit the last prompt 和 Prompt library。右边是答案：先是一行，说明 Picture 1 从第一个镜头起被完整引用，然后是 I2VA 填的那三个字段](docs/node_universal_rewriter.png)
 
 *一个节点，三个标签页。模型那几行以上的东西不属于任何标签页 —— 任务、比例、时长和
 提示词是同一组值，无论哪个适配器亮着都一样。它们下面，每个标签页各有自己的模型和
@@ -683,7 +685,7 @@ python -m pip install huggingface_hub hf_xet
 Qwen3.5-9B 大约二十秒就能把三个字段都填满，镜头术语、说话人标识和
 `<d>[English] …</d>` 对白标签都写得对。
 
-![T2VA 写作节点和一个文本查看器并排：左边是四行提示词，右边是逐镜头的描述，两个编号镜头、一段声景，以及写着 N/A 的 non_diegetic_music](docs/node_t2va.png)
+![T2VA 写作节点，夹在选项节点和文本查看器之间：一行提示词，一个来自 Ollama 的模型，右边是逐镜头的描述，三个编号镜头、一段声景，以及描述钢琴和大提琴的 non_diegetic_music](docs/node_t2va.png)
 
 *T2VA，16:9，10 秒，跑在本地一个 Qwen3.6-27B 上 —— 11.2 秒。提示词是用俄语递进去的，
 描述按 H3 的英文格式回来，切点就在提示词要求的 00:03.000，而
@@ -791,7 +793,7 @@ Audio 1: voice-timbre reference for the woman — low, unhurried, slight rasp
 而那又取决于每一份素材插在了哪个插槽上。真实存在、而且是承重的，却在屏幕上哪儿都
 看不见。
 
-![通用写作节点：五行参考输入，每一行带一个复选框，其中四行接着东西；接着是一条四个彩色方块的素材条，ref_0 上面写着 subj 1、ref_1 上面 pic 1、ref_2 上面 vid 1、ref_3 上面 aud 1，每个方块带一个 “+ instr” 按钮，底下还有一行说明文字；任务开关上 Ref2VA 亮着；八个按真实比例画出来的画面比例方框，从 48:9 到 9:16，选中的是 16:9；时长滑块停在 10；提示词；描述模型和写作模型两个下拉框；底部四个按钮：Open model list、Open guide folder、Save the last prompt 和 Prompt library。右边是六个字段的答案，围着 <Subject 1>、<Picture 1>、<Video 1> 和 <Audio 1> 写成](docs/node_universal_writer.png)
+![通用写作节点，左边接着一个 Load Video 节点和一个 Load Image 节点：四行参考输入，每一行带一个复选框，其中三行接着东西；接着是一条三个彩色方块的素材条，ref_0 上面写着 vid 1、ref_1 上面 aud 1、ref_2 上面 pic 1，每个方块带一个 “+ instr” 按钮，底下还有一行说明文字；任务开关上 Ref2VA 亮着；八个按真实比例画出来的画面比例方框，从 48:9 到 9:16，选中的是 16:9；时长滑块停在 15.1；提示词；描述模型和写作模型两个下拉框；底部六个按钮：Model list、Open guide folder、Unload model、Save the last prompt、Edit the last prompt 和 Prompt library。右边是六个字段的答案，围着 <Subject 1>、<Picture 1>、<Video 1> 和 <Audio 1> 写成](docs/node_universal_writer.png)
 
 *四份参考素材接在同一个会自动增长的插槽上 —— 一张当主体用的图片、一张当画面帧用的
 图片、一段片段和一段声音 —— 右边的答案正是围着这几个标签写的：`<Subject 1>`、
@@ -1824,6 +1826,34 @@ ComfyUI 自己的缓存做不到这件事。一个节点的缓存键是它的类
 默认情况下，这个开关交回来的是节点自己上一次的答案，而[提示词库](#提示词库)是你把
 它指向别的东西的办法。无论哪一边都只有一个开关：`repeat_last` 决定一段留下来的提示词
 到底交不交出去，库窗口决定交的是哪一段。
+
+### 卸载留在内存里的模型
+
+`keep_model_loaded` 会让写作模型在一次运行之后留在内存里。在你反复打磨提示词的时候，
+这正是你要的；而等到文字已经满意、显卡要腾给视频的时候，它就成了挡路的东西。把这个
+开关关掉，并不是把显卡要回来的省事办法：它是节点的一个输入，输入一变就是一次新的
+运行，节点会先把同样那段文字再写一遍，然后才卸载。有三种办法可以不让模型再跑一遍就
+把它放掉。
+
+**`Unload model`** 是每个带这个开关的节点上的一个按钮。它把节点包手上拿着的东西立刻
+全部卸载。如果在节点还在写的时候按下去，它会等这次运行结束，然后再卸载 —— 不管
+`keep_model_loaded` 怎么说，因为这一下是后按的。
+
+**ComfyUI 自己的 `Unload Models`** 也够得着节点包的模型。它们不是 ComfyUI 的模型，
+ComfyUI 的模型管理并不认识它们，所以节点包把自己挂进了那个卸载动作。凡是要求 ComfyUI
+卸载全部模型的东西也都一样：`/free` 接口、显存不足时的处理，以及别的节点包里的清理
+节点 —— 在写作节点和采样器之间放一个，写作模型就会赶在视频模型加载之前离开。反过来
+也成立：一个为自己清空显卡的采样器（有好几个节点包就是这么做的）会把留着的写作模型
+连同其余的一起带走；而在 `--disable-smart-memory` 下，ComfyUI 每跑完一次工作流就卸载
+一切，所以留着的模型只活到这一次运行结束，不会更久。
+
+**`repeat_last` 开着而 `keep_model_loaded` 关着**，同样会卸载。一个把留下来的提示词
+交回来的节点并不运行模型，但它照样会读这个开关：文字从节点自己的仓库里回来，模型被
+卸载，什么都不会写两遍。
+
+这三种办法放掉的都是节点包在 ComfyUI 进程里拿着的一切 —— 一个 Transformers 检查点，
+或者一个跑在 `llama-cpp-python` 上的 GGUF —— 而不只是你按下按钮的那个节点的模型。由
+llama.cpp 二进制程序运行的 GGUF 本来就没有被留下：模型随进程一起离开。
 
 ### 答案会被检查一遍
 

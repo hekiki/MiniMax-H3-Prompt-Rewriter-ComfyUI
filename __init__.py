@@ -4,6 +4,7 @@ import importlib
 import logging
 
 from .minimax_h3_rewriter import routes as _routes  # registers HTTP routes
+from .minimax_h3_rewriter import resident as _resident
 from .minimax_h3_rewriter.nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 from .minimax_h3_rewriter import writer_8b
 
@@ -11,6 +12,11 @@ NODE_CLASS_MAPPINGS.update(writer_8b.NODE_CLASS_MAPPINGS)
 NODE_DISPLAY_NAME_MAPPINGS.update(writer_8b.NODE_DISPLAY_NAME_MAPPINGS)
 
 log = logging.getLogger(__name__)
+
+try:
+    _resident.install()
+except Exception:  # noqa: BLE001 - the nodes must still load
+    log.warning("[minimax_h3_rewriter] unloading not hooked into ComfyUI's own", exc_info=True)
 
 for _module_name, _label in (
     ("multi_caption", "Multi Reference Caption"),

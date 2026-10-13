@@ -587,6 +587,7 @@ class MiniMaxH3UniversalRewriter(io.ComfyNode):
             library_pick, repeat_last, "MiniMaxH3UniversalRewriter", 1 + len(UNIVERSAL_FIELDS),
             cls.hidden.unique_id,
             having=[KIND_OF_SLOT.get(name) for name in connected],
+            keep_loaded=keep_model_loaded,
         )
         if chosen is not None:
             return io.NodeOutput(*chosen, handed_on)

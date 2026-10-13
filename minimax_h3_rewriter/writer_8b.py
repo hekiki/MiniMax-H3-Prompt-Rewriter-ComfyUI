@@ -615,6 +615,7 @@ class MiniMaxH3PromptWriter8B:
             library_pick, repeat_last, "MiniMaxH3PromptWriter8B",
             1 + len(OUTPUT_FIELDS), unique_id,
             having=["image" for frame in (first_frame, last_frame) if frame is not None],
+            keep_loaded=keep_model_loaded,
         )
         if chosen is not None:
             return chosen

@@ -19,6 +19,7 @@ from . import (
     paths,
     presets,
     previews,
+    resident,
 )
 
 log = logging.getLogger(__name__)
@@ -131,6 +132,11 @@ def _check_entry(section: str, raw: dict) -> dict:
     entry = model_sections.clean_entry(section, raw)
     found = model_sections.check(section, entry)
     return {"ok": True, "label": catalog.entry_label(entry), **found}
+
+
+def _unload() -> dict:
+    """Let go of what the pack is holding, in the shape the button reads."""
+    return {"ok": True, **resident.release("asked for with the button on a node")}
 
 
 def register() -> None:
@@ -517,6 +523,17 @@ def register() -> None:
         """What this entry actually is, as far as that can be known without weights."""
         body = await request.json()
         return await answered(_check_entry, body.get("section") or "", body.get("entry") or {})
+
+    @routes.post(f"{PREFIX}/unload")
+    async def unload_models(request):
+        """Unload every model the pack holds in this process, with no run to do it.
+
+        Off the loop like the rest of these: closing a llama.cpp context takes a
+        moment, and a run that is just starting holds the same guard. Asked for
+        in the middle of a run, it answers ``waiting`` and happens when the run
+        ends.
+        """
+        return await answered(_unload)
 
     def _effects() -> dict:
         directory = paths.embeddings_root()

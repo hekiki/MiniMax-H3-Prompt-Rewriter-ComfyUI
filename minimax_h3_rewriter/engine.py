@@ -17,13 +17,13 @@ import threading
 import time
 from contextlib import contextmanager
 
-from . import devices
+from . import devices, resident
 from .constants import MERGE_AUTO, MERGE_OFF, MERGE_ON, normalize_seed
 from .progress import NodeProgress
 
 log = logging.getLogger(__name__)
 
-_STATE: dict = {"key": None, "tokenizer": None, "model": None, "processor": None}
+_STATE: dict = {"key": None, "tokenizer": None, "model": None, "processor": None, "name": ""}
 _LOCK = threading.RLock()
 
 PREVIEW_TAIL = 280
@@ -424,6 +424,7 @@ def load(
         _STATE.update(
             key=key, tokenizer=tokenizer, model=model,
             processor=_load_processor(base_dir, remote_code),
+            name=os.path.basename(os.path.normpath(base_dir)),
         )
 
         if progress is not None:
@@ -436,8 +437,13 @@ def unload() -> None:
         if _STATE["model"] is None and _STATE["tokenizer"] is None:
             _STATE["key"] = None
             return
-        _STATE.update(key=None, tokenizer=None, model=None, processor=None)
+        _STATE.update(key=None, tokenizer=None, model=None, processor=None, name="")
     _empty_cache()
+
+
+def holding() -> str:
+    """The folder name of the checkpoint that is loaded, or the empty string."""
+    return _STATE["name"] if _STATE["model"] is not None else ""
 
 
 def processor():
@@ -788,26 +794,29 @@ def rewrite(
     """Load (or reuse) the rewriter, generate once, and optionally release VRAM.
 
     The model reference never escapes this frame, so ``unload`` can actually
-    drop the last reference and free the device memory.
+    drop the last reference and free the device memory. The whole of it runs
+    under ``resident.in_use``, which is what keeps an unload asked for from
+    another thread from landing in the middle.
     """
-    tokenizer, model = load(
-        base_dir, adapter_dir, quantization, attn_implementation, device, progress,
-        trust_remote_code=trust_remote_code, merge_lora=merge_lora,
-    )
-    try:
-        if images:
-            reader = processor()
-            if reader is None:
-                raise RuntimeError(
-                    f"'{base_dir}' has no processor, so it cannot be shown a picture. This is a "
-                    f"text-only checkpoint -- pick the full multimodal build, or a task that "
-                    f"needs no reference frame."
+    with resident.in_use():
+        tokenizer, model = load(
+            base_dir, adapter_dir, quantization, attn_implementation, device, progress,
+            trust_remote_code=trust_remote_code, merge_lora=merge_lora,
+        )
+        try:
+            if images:
+                reader = processor()
+                if reader is None:
+                    raise RuntimeError(
+                        f"'{base_dir}' has no processor, so it cannot be shown a picture. This "
+                        f"is a text-only checkpoint -- pick the full multimodal build, or a "
+                        f"task that needs no reference frame."
+                    )
+                return generate_with_images(
+                    reader, model, images=list(images), progress=progress, **generation
                 )
-            return generate_with_images(
-                reader, model, images=list(images), progress=progress, **generation
-            )
-        return generate(tokenizer, model, progress=progress, **generation)
-    finally:
-        del tokenizer, model
-        if not keep_loaded:
-            unload()
+            return generate(tokenizer, model, progress=progress, **generation)
+        finally:
+            del tokenizer, model
+            if not keep_loaded:
+                unload()
